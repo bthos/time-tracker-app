@@ -89,3 +89,8 @@ Cargo.lock
 
 # Vite
 .vite/
+
+# Website
+website/dist/
+website/node_modules/
+website/.vite/
