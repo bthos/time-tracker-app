@@ -5,10 +5,38 @@ on:
     branches:
       - main
       - master
+    paths:
+      - 'frontend/**'
+      - 'backend/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'vite.config.ts'
+      - 'tsconfig.json'
+      - 'tsconfig.node.json'
+      - 'tailwind.config.js'
+      - 'postcss.config.js'
+      - 'index.html'
+      - 'public/**'
+      - '.github/workflows/build.yml'
+      - '.github/workflows/release.yml'
   pull_request:
     branches:
       - main
       - master
+    paths:
+      - 'frontend/**'
+      - 'backend/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'vite.config.ts'
+      - 'tsconfig.json'
+      - 'tsconfig.node.json'
+      - 'tailwind.config.js'
+      - 'postcss.config.js'
+      - 'index.html'
+      - 'public/**'
+      - '.github/workflows/build.yml'
+      - '.github/workflows/release.yml'
   workflow_dispatch:
 
 permissions:
