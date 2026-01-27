@@ -275,16 +275,31 @@ jobs:
       - name: Copy icons to backend directory
         shell: bash
         run: |
+          echo "Current directory: $(pwd)"
+          echo "Listing public/icons:"
+          ls -la public/icons/ || echo "public/icons directory not found"
+          echo "Creating backend/icons directory..."
           mkdir -p backend/icons
-          if [ -f public/icons/icon.ico ]; then cp public/icons/icon.ico backend/icons/; fi
-          if [ -f public/icons/icon.png ]; then cp public/icons/icon.png backend/icons/; fi
+          echo "Copying icons..."
+          if [ -f public/icons/icon.ico ]; then 
+            cp public/icons/icon.ico backend/icons/ && echo "Copied icon.ico"
+          else
+            echo "icon.ico not found in public/icons/"
+          fi
+          if [ -f public/icons/icon.png ]; then 
+            cp public/icons/icon.png backend/icons/ && echo "Copied icon.png"
+          else
+            echo "icon.png not found in public/icons/"
+          fi
+          echo "Verifying copied icons:"
+          ls -la backend/icons/ || echo "backend/icons directory is empty"
 
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          projectPath: .
+          projectPath: backend
           tagName: v${{ needs.prepare-release.outputs.version }}
           releaseName: "Time Tracker v${{ needs.prepare-release.outputs.version }}"
           releaseBody: |
