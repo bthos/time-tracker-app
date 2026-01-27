@@ -25,7 +25,7 @@ const PomodoroTransitionModal: React.FC<PomodoroTransitionModalProps> = ({
   const [countdown, setCountdown] = useState(autoConfirmDelay);
   const hasConfirmedRef = useRef(false);
   const onConfirmRef = useRef(onConfirm);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const timerRef = useRef<number | null>(null);
 
   // Keep onConfirm ref up to date
   useEffect(() => {
