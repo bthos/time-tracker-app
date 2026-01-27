@@ -1,6 +1,7 @@
-import { getGitHubUrl } from '../config';
+import { FC } from 'react';
+import { getGitHubUrl, getAssetPath } from '../config';
 
-const Hero: React.FC = () => {
+const Hero: FC = () => {
   const scrollToDownload = () => {
     const element = document.getElementById('download');
     if (element) {
@@ -67,7 +68,7 @@ const Hero: React.FC = () => {
           <div className="relative">
             <div className="rounded-lg shadow-2xl overflow-hidden border border-gray-200">
               <img
-                src="/screenshots/reports.png"
+                src={getAssetPath('/screenshots/reports.png')}
                 alt="TimeTracker Reports & Analytics"
                 className="w-full h-auto"
                 loading="eager"
