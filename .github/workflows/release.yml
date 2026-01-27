@@ -269,37 +269,6 @@ jobs:
             libayatana-appindicator3-dev \
             librsvg2-dev
 
-      - name: Setup icons for Tauri build
-        shell: bash
-        run: |
-          echo "Current working directory: $(pwd)"
-          echo "Checking source icons..."
-          ls -la public/icons/ || echo "public/icons not found"
-          echo "Creating backend/icons directory..."
-          mkdir -p backend/icons
-          echo "Copying icons..."
-          if [ -f public/icons/icon.ico ]; then
-            cp public/icons/icon.ico backend/icons/icon.ico
-            echo "✓ Copied icon.ico"
-          else
-            echo "✗ icon.ico not found!"
-            exit 1
-          fi
-          if [ -f public/icons/icon.png ]; then
-            cp public/icons/icon.png backend/icons/icon.png
-            echo "✓ Copied icon.png"
-          else
-            echo "✗ icon.png not found!"
-            exit 1
-          fi
-          echo "Verifying copied icons:"
-          ls -la backend/icons/
-          if [ ! -f backend/icons/icon.ico ] || [ ! -f backend/icons/icon.png ]; then
-            echo "ERROR: Icons were not copied successfully!"
-            exit 1
-          fi
-          echo "✓ All icons copied successfully"
-
       - name: Build frontend
         run: npm run build
 
