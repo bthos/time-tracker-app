@@ -1,6 +1,6 @@
 [package]
 name = "time-tracker-app"
-version = "0.2.4"
+version = "0.2.5"
 description = "Desktop application for automatic time tracking"
 authors = ["TimeTracker"]
 license = "MIT"
