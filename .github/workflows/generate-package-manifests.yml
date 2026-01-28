@@ -538,6 +538,15 @@ jobs:
       contents: write
       pull-requests: write
     steps:
+      - name: Check for PAT token
+        run: |
+          if [ -z "${{ secrets.PACKAGE_MANAGER_PAT }}" ]; then
+            echo "::warning::PACKAGE_MANAGER_PAT secret is not set. PR creation may fail."
+            echo "::warning::To create PRs in external repositories, you need to:"
+            echo "::warning::1. Create a Personal Access Token (PAT) with 'repo' scope"
+            echo "::warning::2. Add it as a secret named 'PACKAGE_MANAGER_PAT' in repository settings"
+            echo "::warning::See: https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token"
+          fi
       - name: Download WinGet manifests
         uses: actions/download-artifact@v4
         with:
@@ -549,12 +558,18 @@ jobs:
           cd winget-manifests
           unzip -q winget-manifests.zip
           cd ..
+          
+          # Debug: Show structure
+          echo "Manifest structure:"
+          find winget-manifests -type f -name "*.yaml" | head -20 || echo "No YAML files found"
+          echo "Directory structure:"
+          find winget-manifests/manifests -type d | head -20 || echo "No manifests directory found"
 
       - name: Checkout winget-pkgs repository
         uses: actions/checkout@v4
         with:
           repository: microsoft/winget-pkgs
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.PACKAGE_MANAGER_PAT || secrets.GITHUB_TOKEN }}
           path: winget-pkgs
           fetch-depth: 1
 
@@ -588,6 +603,8 @@ jobs:
 
       - name: Create branch and copy manifests
         id: create_branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.PACKAGE_MANAGER_PAT || secrets.GITHUB_TOKEN }}
         run: |
           cd winget-pkgs
           VERSION="${{ steps.get_version.outputs.version }}"
@@ -596,9 +613,19 @@ jobs:
           # Create new branch
           git checkout -b "$BRANCH_NAME"
           
+          # Create directory structure if it doesn't exist
+          mkdir -p manifests/t/TimeTracker
+          
           # Copy manifests to correct location
           # Structure: manifests/t/TimeTracker/VERSION/
-          cp -r ../winget-manifests/manifests/t/TimeTracker/$VERSION manifests/t/TimeTracker/
+          if [ -d "../winget-manifests/manifests/t/TimeTracker/$VERSION" ]; then
+            cp -r ../winget-manifests/manifests/t/TimeTracker/$VERSION manifests/t/TimeTracker/
+          else
+            echo "::error::Manifest directory not found: ../winget-manifests/manifests/t/TimeTracker/$VERSION"
+            ls -la ../winget-manifests/manifests/t/ || echo "Manifests directory structure:"
+            find ../winget-manifests -type d -name "*TimeTracker*" || echo "No TimeTracker directories found"
+            exit 1
+          fi
           
           # Stage changes
           git add manifests/t/TimeTracker/$VERSION/
@@ -606,38 +633,70 @@ jobs:
           # Commit
           git commit -m "Add TimeTracker version $VERSION"
           
-          # Push branch
-          git push origin "$BRANCH_NAME"
+          # Configure git to use token for push
+          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/microsoft/winget-pkgs.git
+          
+          # Push branch (suppress token from logs)
+          git push origin "$BRANCH_NAME" 2>&1 | sed "s/${GITHUB_TOKEN}/[REDACTED]/g"
           
           echo "branch=$BRANCH_NAME" >> $GITHUB_OUTPUT
 
       - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v5
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          repo: microsoft/winget-pkgs
-          branch: ${{ steps.create_branch.outputs.branch }}
-          title: "Add TimeTracker version ${{ steps.get_version.outputs.version }}"
-          body: |
-            ## Description
-            This PR adds TimeTracker version ${{ steps.get_version.outputs.version }} to the WinGet repository.
-            
-            ## Changes
-            - Added manifests for TimeTracker ${{ steps.get_version.outputs.version }}
-            - Installer: MSI package
-            - Architecture: x64
-            
-            ## Checklist
-            - [x] Manifest files are correctly formatted
-            - [x] Installer URL is valid and accessible
-            - [x] SHA256 checksum is correct
-            - [x] Silent install switches are configured
-            
-            ## Related
-            Release: https://github.com/${{ github.repository }}/releases/tag/${{ steps.get_version.outputs.tag }}
-          labels: |
-            New-Package
-          draft: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.PACKAGE_MANAGER_PAT || secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.get_version.outputs.version }}"
+          BRANCH="${{ steps.create_branch.outputs.branch }}"
+          
+          PR_BODY=$(cat <<EOF
+          ## Description
+          This PR adds TimeTracker version $VERSION to the WinGet repository.
+          
+          ## Changes
+          - Added manifests for TimeTracker $VERSION
+          - Installer: MSI package
+          - Architecture: x64
+          
+          ## Checklist
+          - [x] Manifest files are correctly formatted
+          - [x] Installer URL is valid and accessible
+          - [x] SHA256 checksum is correct
+          - [x] Silent install switches are configured
+          
+          ## Related
+          Release: https://github.com/${{ github.repository }}/releases/tag/${{ steps.get_version.outputs.tag }}
+          EOF
+          )
+          
+          # Create PR using GitHub API
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github.v3+json" \
+            https://api.github.com/repos/microsoft/winget-pkgs/pulls \
+            -d "{
+              \"title\": \"Add TimeTracker version $VERSION\",
+              \"head\": \"$BRANCH\",
+              \"base\": \"main\",
+              \"body\": $(echo "$PR_BODY" | jq -Rs .),
+              \"labels\": [\"New-Package\"]
+            }")
+          
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          
+          if [ "$HTTP_CODE" -eq 201 ]; then
+            PR_URL=$(echo "$BODY" | jq -r '.html_url')
+            echo "✅ Pull Request created successfully: $PR_URL"
+          elif [ "$HTTP_CODE" -eq 422 ]; then
+            ERROR_MSG=$(echo "$BODY" | jq -r '.errors[0].message // .message // "Unknown error"')
+            echo "::warning::PR may already exist or validation failed: $ERROR_MSG"
+            echo "::warning::Branch was created: $BRANCH"
+            echo "::warning::You can manually create PR at: https://github.com/microsoft/winget-pkgs/compare/main...$BRANCH"
+          else
+            echo "::error::Failed to create PR. HTTP $HTTP_CODE"
+            echo "$BODY" | jq '.' || echo "$BODY"
+            exit 1
+          fi
 
   create-homebrew-pr:
     needs: [prepare-artifacts, generate-homebrew]
@@ -654,6 +713,15 @@ jobs:
       contents: write
       pull-requests: write
     steps:
+      - name: Check for PAT token
+        run: |
+          if [ -z "${{ secrets.PACKAGE_MANAGER_PAT }}" ]; then
+            echo "::warning::PACKAGE_MANAGER_PAT secret is not set. PR creation may fail."
+            echo "::warning::To create PRs in external repositories, you need to:"
+            echo "::warning::1. Create a Personal Access Token (PAT) with 'repo' scope"
+            echo "::warning::2. Add it as a secret named 'PACKAGE_MANAGER_PAT' in repository settings"
+            echo "::warning::See: https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token"
+          fi
       - name: Download Homebrew Cask
         uses: actions/download-artifact@v4
         with:
@@ -664,7 +732,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: homebrew/homebrew-cask
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.PACKAGE_MANAGER_PAT || secrets.GITHUB_TOKEN }}
           path: homebrew-cask-repo
           fetch-depth: 1
 
@@ -710,6 +778,8 @@ jobs:
 
       - name: Create or update cask
         id: create_cask
+        env:
+          GITHUB_TOKEN: ${{ secrets.PACKAGE_MANAGER_PAT || secrets.GITHUB_TOKEN }}
         run: |
           cd homebrew-cask-repo
           VERSION="${{ steps.get_version.outputs.version }}"
@@ -733,36 +803,69 @@ jobs:
           
           git commit -m "$COMMIT_MSG"
           
-          # Push branch
-          git push origin "$BRANCH_NAME"
+          # Configure git to use token for push
+          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/homebrew/homebrew-cask.git
+          
+          # Push branch (suppress token from logs)
+          git push origin "$BRANCH_NAME" 2>&1 | sed "s/${GITHUB_TOKEN}/[REDACTED]/g"
           
           echo "branch=$BRANCH_NAME" >> $GITHUB_OUTPUT
           echo "commit_msg=$COMMIT_MSG" >> $GITHUB_OUTPUT
 
       - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v5
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          repo: homebrew/homebrew-cask
-          branch: ${{ steps.create_cask.outputs.branch }}
-          title: "${{ steps.create_cask.outputs.commit_msg }}"
-          body: |
-            ## Description
-            ${{ steps.create_cask.outputs.commit_msg }}.
-            
-            ## Changes
-            - Version: ${{ steps.get_version.outputs.version }}
-            - SHA256: Verified
-            - URL: Direct download from GitHub Releases
-            
-            ## Checklist
-            - [x] Cask file is correctly formatted
-            - [x] SHA256 checksum is correct
-            - [x] URL is valid and accessible
-            - [x] App bundle name is correct
-            
-            ## Related
-            Release: https://github.com/${{ github.repository }}/releases/tag/${{ steps.get_version.outputs.tag }}
-          labels: |
-            new cask
-          draft: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.PACKAGE_MANAGER_PAT || secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.get_version.outputs.version }}"
+          BRANCH="${{ steps.create_cask.outputs.branch }}"
+          COMMIT_MSG="${{ steps.create_cask.outputs.commit_msg }}"
+          
+          PR_BODY=$(cat <<EOF
+          ## Description
+          $COMMIT_MSG.
+          
+          ## Changes
+          - Version: $VERSION
+          - SHA256: Verified
+          - URL: Direct download from GitHub Releases
+          
+          ## Checklist
+          - [x] Cask file is correctly formatted
+          - [x] SHA256 checksum is correct
+          - [x] URL is valid and accessible
+          - [x] App bundle name is correct
+          
+          ## Related
+          Release: https://github.com/${{ github.repository }}/releases/tag/${{ steps.get_version.outputs.tag }}
+          EOF
+          )
+          
+          # Create PR using GitHub API
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github.v3+json" \
+            https://api.github.com/repos/homebrew/homebrew-cask/pulls \
+            -d "{
+              \"title\": \"$COMMIT_MSG\",
+              \"head\": \"$BRANCH\",
+              \"base\": \"master\",
+              \"body\": $(echo "$PR_BODY" | jq -Rs .),
+              \"labels\": [\"new cask\"]
+            }")
+          
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          
+          if [ "$HTTP_CODE" -eq 201 ]; then
+            PR_URL=$(echo "$BODY" | jq -r '.html_url')
+            echo "✅ Pull Request created successfully: $PR_URL"
+          elif [ "$HTTP_CODE" -eq 422 ]; then
+            ERROR_MSG=$(echo "$BODY" | jq -r '.errors[0].message // .message // "Unknown error"')
+            echo "::warning::PR may already exist or validation failed: $ERROR_MSG"
+            echo "::warning::Branch was created: $BRANCH"
+            echo "::warning::You can manually create PR at: https://github.com/homebrew/homebrew-cask/compare/master...$BRANCH"
+          else
+            echo "::error::Failed to create PR. HTTP $HTTP_CODE"
+            echo "$BODY" | jq '.' || echo "$BODY"
+            exit 1
+          fi
