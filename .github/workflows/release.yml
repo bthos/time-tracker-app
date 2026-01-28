@@ -273,39 +273,43 @@ jobs:
         run: |
           VERSION="${{ needs.prepare-release.outputs.version }}"
           
-          # Update package.json
-          node << EOF
+          # Use Node.js for all updates (cross-platform)
+          node -e "
           const fs = require('fs');
-          const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-          packageJson.version = "$VERSION";
-          fs.writeFileSync('package.json', JSON.stringify(packageJson, null, 2) + '\n');
-          EOF
+          const path = require('path');
           
-          # Update Cargo.toml (cross-platform)
-          if [[ "${{ runner.os }}" == "Windows" ]]; then
-            # PowerShell for Windows
-            powershell -Command "(Get-Content backend/Cargo.toml) -replace '^version = \".*\"', 'version = \"$VERSION\"' | Set-Content backend/Cargo.toml"
-          else
-            # sed for Linux/macOS
-            sed -i "s/^version = \".*\"/version = \"$VERSION\"/" backend/Cargo.toml
-          fi
+          // Update package.json
+          const packageJsonPath = 'package.json';
+          const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+          packageJson.version = '$VERSION';
+          fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2) + '\n');
+          console.log('Updated package.json to version', packageJson.version);
           
-          # Update tauri.conf.json
-          node << EOF
-          const fs = require('fs');
-          const config = JSON.parse(fs.readFileSync('backend/tauri.conf.json', 'utf8'));
-          config.package.version = "$VERSION";
-          fs.writeFileSync('backend/tauri.conf.json', JSON.stringify(config, null, 2) + '\n');
-          EOF
+          // Update Cargo.toml
+          const cargoTomlPath = 'backend/Cargo.toml';
+          let cargoToml = fs.readFileSync(cargoTomlPath, 'utf8');
+          cargoToml = cargoToml.replace(/^version = \".*\"/m, 'version = \"$VERSION\"');
+          fs.writeFileSync(cargoTomlPath, cargoToml);
+          console.log('Updated Cargo.toml to version', '$VERSION');
           
-          echo "Updated all version files to $VERSION"
-          echo "package.json version: $(node -p \"require('./package.json').version\")"
-          if [[ "${{ runner.os }}" == "Windows" ]]; then
-            echo "Cargo.toml version: $(powershell -Command \"(Get-Content backend/Cargo.toml | Select-String '^version =').Line\")"
-          else
-            echo "Cargo.toml version: $(grep '^version =' backend/Cargo.toml)"
-          fi
-          echo "tauri.conf.json version: $(node -p \"require('./backend/tauri.conf.json').package.version\")"
+          // Update tauri.conf.json
+          const tauriConfigPath = 'backend/tauri.conf.json';
+          const tauriConfig = JSON.parse(fs.readFileSync(tauriConfigPath, 'utf8'));
+          tauriConfig.package.version = '$VERSION';
+          fs.writeFileSync(tauriConfigPath, JSON.stringify(tauriConfig, null, 2) + '\n');
+          console.log('Updated tauri.conf.json to version', tauriConfig.package.version);
+          
+          // Verify updates
+          console.log('\nVerification:');
+          const verifyPackageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+          const verifyCargoToml = fs.readFileSync(cargoTomlPath, 'utf8');
+          const verifyTauriConfig = JSON.parse(fs.readFileSync(tauriConfigPath, 'utf8'));
+          
+          console.log('package.json version:', verifyPackageJson.version);
+          const cargoVersionMatch = verifyCargoToml.match(/^version = \"(.+)\"/m);
+          console.log('Cargo.toml version:', cargoVersionMatch ? cargoVersionMatch[1] : 'NOT FOUND');
+          console.log('tauri.conf.json version:', verifyTauriConfig.package.version);
+          "
 
       - name: Build frontend
         run: npm run build
