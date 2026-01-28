@@ -1,0 +1,490 @@
+name: Generate Package Manager Manifests
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., v0.2.3) - leave empty for latest release'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  prepare-artifacts:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get_version.outputs.version }}
+      msi_url: ${{ steps.get_artifacts.outputs.msi_url }}
+      msi_size: ${{ steps.get_artifacts.outputs.msi_size }}
+      msi_sha256: ${{ steps.checksums.outputs.msi_sha256 }}
+      dmg_url: ${{ steps.get_artifacts.outputs.dmg_url }}
+      dmg_size: ${{ steps.get_artifacts.outputs.dmg_size }}
+      dmg_sha256: ${{ steps.checksums.outputs.dmg_sha256 }}
+      deb_url: ${{ steps.get_artifacts.outputs.deb_url }}
+      deb_size: ${{ steps.get_artifacts.outputs.deb_size }}
+      deb_sha256: ${{ steps.checksums.outputs.deb_sha256 }}
+      release_id: ${{ steps.get_artifacts.outputs.release_id }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get version
+        id: get_version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+            # Remove 'v' prefix if present
+            VERSION=${VERSION#v}
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+          else
+            # Get latest release
+            LATEST_TAG=$(gh release list --limit 1 --json tagName --jq '.[0].tagName')
+            VERSION=${LATEST_TAG#v}
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "tag=$LATEST_TAG" >> $GITHUB_OUTPUT
+          fi
+          echo "Using version: $VERSION"
+
+      - name: Setup GitHub CLI
+        uses: actions/setup-github-cli@v1
+
+      - name: Get release artifacts
+        id: get_artifacts
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.get_version.outputs.tag }}
+        run: |
+          # Get release by tag
+          RELEASE_JSON=$(gh api repos/${{ github.repository }}/releases/tags/${TAG})
+          RELEASE_ID=$(echo "$RELEASE_JSON" | jq -r '.id')
+          echo "release_id=$RELEASE_ID" >> $GITHUB_OUTPUT
+          
+          # Find MSI file
+          MSI_ASSET=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | endswith(".msi"))')
+          if [ -n "$MSI_ASSET" ] && [ "$MSI_ASSET" != "null" ]; then
+            MSI_URL=$(echo "$MSI_ASSET" | jq -r '.browser_download_url')
+            MSI_SIZE=$(echo "$MSI_ASSET" | jq -r '.size')
+            echo "msi_url=$MSI_URL" >> $GITHUB_OUTPUT
+            echo "msi_size=$MSI_SIZE" >> $GITHUB_OUTPUT
+            echo "Found MSI: $MSI_URL"
+          fi
+          
+          # Find DMG file
+          DMG_ASSET=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | endswith(".dmg"))')
+          if [ -n "$DMG_ASSET" ] && [ "$DMG_ASSET" != "null" ]; then
+            DMG_URL=$(echo "$DMG_ASSET" | jq -r '.browser_download_url')
+            DMG_SIZE=$(echo "$DMG_ASSET" | jq -r '.size')
+            echo "dmg_url=$DMG_URL" >> $GITHUB_OUTPUT
+            echo "dmg_size=$DMG_SIZE" >> $GITHUB_OUTPUT
+            echo "Found DMG: $DMG_URL"
+          fi
+          
+          # Find DEB file
+          DEB_ASSET=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | endswith(".deb"))')
+          if [ -n "$DEB_ASSET" ] && [ "$DEB_ASSET" != "null" ]; then
+            DEB_URL=$(echo "$DEB_ASSET" | jq -r '.browser_download_url')
+            DEB_SIZE=$(echo "$DEB_ASSET" | jq -r '.size')
+            echo "deb_url=$DEB_URL" >> $GITHUB_OUTPUT
+            echo "deb_size=$DEB_SIZE" >> $GITHUB_OUTPUT
+            echo "Found DEB: $DEB_URL"
+          fi
+
+      - name: Download and calculate checksums
+        id: checksums
+        run: |
+          mkdir -p artifacts
+          
+          # Download MSI and calculate SHA-256
+          if [ -n "${{ steps.get_artifacts.outputs.msi_url }}" ]; then
+            curl -L -o artifacts/installer.msi "${{ steps.get_artifacts.outputs.msi_url }}"
+            MSI_SHA256=$(sha256sum artifacts/installer.msi | cut -d' ' -f1)
+            echo "msi_sha256=$MSI_SHA256" >> $GITHUB_OUTPUT
+            echo "MSI SHA-256: $MSI_SHA256"
+          fi
+          
+          # Download DMG and calculate SHA-256
+          if [ -n "${{ steps.get_artifacts.outputs.dmg_url }}" ]; then
+            curl -L -o artifacts/installer.dmg "${{ steps.get_artifacts.outputs.dmg_url }}"
+            DMG_SHA256=$(sha256sum artifacts/installer.dmg | cut -d' ' -f1)
+            echo "dmg_sha256=$DMG_SHA256" >> $GITHUB_OUTPUT
+            echo "DMG SHA-256: $DMG_SHA256"
+          fi
+          
+          # Download DEB and calculate SHA-256
+          if [ -n "${{ steps.get_artifacts.outputs.deb_url }}" ]; then
+            curl -L -o artifacts/installer.deb "${{ steps.get_artifacts.outputs.deb_url }}"
+            DEB_SHA256=$(sha256sum artifacts/installer.deb | cut -d' ' -f1)
+            echo "deb_sha256=$DEB_SHA256" >> $GITHUB_OUTPUT
+            echo "DEB SHA-256: $DEB_SHA256"
+          fi
+
+  generate-winget:
+    needs: prepare-artifacts
+    if: needs.prepare-artifacts.outputs.msi_url != ''
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get app metadata
+        id: metadata
+        run: |
+          # Read from tauri.conf.json
+          PRODUCT_NAME=$(node -p "require('./backend/tauri.conf.json').package.productName")
+          DESCRIPTION=$(node -p "require('./backend/tauri.conf.json').tauri.bundle.longDescription")
+          SHORT_DESC=$(node -p "require('./backend/tauri.conf.json').tauri.bundle.shortDescription")
+          
+          echo "product_name=$PRODUCT_NAME" >> $GITHUB_OUTPUT
+          echo "description=$DESCRIPTION" >> $GITHUB_OUTPUT
+          echo "short_description=$SHORT_DESC" >> $GITHUB_OUTPUT
+          
+          # Publisher name (first letter of product name for manifest path)
+          PUBLISHER="TimeTracker"
+          PACKAGE_ID="TimeTracker.TimeTracker"
+          echo "publisher=$PUBLISHER" >> $GITHUB_OUTPUT
+          echo "package_id=$PACKAGE_ID" >> $GITHUB_OUTPUT
+
+      - name: Create manifest directory structure
+        run: |
+          $VERSION = "${{ needs.prepare-artifacts.outputs.version }}"
+          $PUBLISHER = "${{ steps.metadata.outputs.publisher }}"
+          $PACKAGE_NAME = "${{ steps.metadata.outputs.product_name }}"
+          
+          # Create directory: manifests/t/TimeTracker/0.2.3/
+          New-Item -ItemType Directory -Force -Path "manifests\t\$PACKAGE_NAME\$VERSION" | Out-Null
+
+      - name: Generate defaultLocale.yaml
+        run: |
+          $VERSION = "${{ needs.prepare-artifacts.outputs.version }}"
+          $PACKAGE_ID = "${{ steps.metadata.outputs.package_id }}"
+          $PUBLISHER = "${{ steps.metadata.outputs.publisher }}"
+          $PRODUCT_NAME = "${{ steps.metadata.outputs.product_name }}"
+          $DESCRIPTION = "${{ steps.metadata.outputs.description }}"
+          $SHORT_DESC = "${{ steps.metadata.outputs.short_description }}"
+          
+          $MANIFEST_PATH = "manifests\t\$PRODUCT_NAME\$VERSION\defaultLocale.yaml"
+          
+          @"
+          # Created with GitHub Actions
+          PackageIdentifier: $PACKAGE_ID
+          Version: $VERSION
+          PackageLocale: en-US
+          Publisher: $PUBLISHER
+          PublisherUrl: https://github.com/${{ github.repository }}
+          PublisherSupportUrl: https://github.com/${{ github.repository }}/issues
+          Author: $PUBLISHER
+          PackageName: $PRODUCT_NAME
+          PackageUrl: https://github.com/${{ github.repository }}
+          License: MIT
+          LicenseUrl: https://github.com/${{ github.repository }}/blob/main/LICENSE
+          Copyright: Copyright (c) 2026 bthos
+          CopyrightUrl: https://github.com/${{ github.repository }}
+          ShortDescription: $SHORT_DESC
+          Description: $DESCRIPTION
+          Tags:
+            - time-tracking
+            - productivity
+            - pomodoro
+            - time-management
+          Moniker: timetracker
+"@ | Out-File -FilePath $MANIFEST_PATH -Encoding UTF8
+
+      - name: Generate installer.yaml
+        run: |
+          $VERSION = "${{ needs.prepare-artifacts.outputs.version }}"
+          $PACKAGE_ID = "${{ steps.metadata.outputs.package_id }}"
+          $PRODUCT_NAME = "${{ steps.metadata.outputs.product_name }}"
+          $MSI_URL = "${{ needs.prepare-artifacts.outputs.msi_url }}"
+          $MSI_SHA256 = "${{ needs.prepare-artifacts.outputs.msi_sha256 }}"
+          
+          $MANIFEST_PATH = "manifests\t\$PRODUCT_NAME\$VERSION\installer.yaml"
+          
+          @"
+          # Created with GitHub Actions
+          PackageIdentifier: $PACKAGE_ID
+          Version: $VERSION
+          InstallerType: msi
+          Architecture: x64
+          InstallerUrl: $MSI_URL
+          InstallerSha256: $MSI_SHA256
+          InstallerSwitches:
+            Silent: "/quiet"
+            SilentWithProgress: "/quiet /norestart"
+          InstallModes:
+            - silent
+            - silentWithProgress
+          Scope: machine
+"@ | Out-File -FilePath $MANIFEST_PATH -Encoding UTF8
+
+      - name: Generate version.yaml
+        run: |
+          $VERSION = "${{ needs.prepare-artifacts.outputs.version }}"
+          $PACKAGE_ID = "${{ steps.metadata.outputs.package_id }}"
+          $PRODUCT_NAME = "${{ steps.metadata.outputs.product_name }}"
+          
+          $MANIFEST_PATH = "manifests\t\$PRODUCT_NAME\$VERSION\version.yaml"
+          
+          @"
+          # Created with GitHub Actions
+          PackageIdentifier: $PACKAGE_ID
+          Version: $VERSION
+          DefaultLocale: en-US
+          ManifestType: version
+          ManifestVersion: 1.4.0
+"@ | Out-File -FilePath $MANIFEST_PATH -Encoding UTF8
+
+      - name: Create winget manifest archive
+        run: |
+          Compress-Archive -Path "manifests" -DestinationPath "winget-manifests.zip" -Force
+
+      - name: Upload WinGet manifests artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: winget-manifests
+          path: winget-manifests.zip
+          retention-days: 30
+
+  generate-homebrew:
+    needs: prepare-artifacts
+    if: needs.prepare-artifacts.outputs.dmg_url != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Get app metadata
+        id: metadata
+        run: |
+          # Read from tauri.conf.json
+          PRODUCT_NAME=$(node -p "require('./backend/tauri.conf.json').package.productName")
+          DESCRIPTION=$(node -p "require('./backend/tauri.conf.json').tauri.bundle.longDescription")
+          IDENTIFIER=$(node -p "require('./backend/tauri.conf.json').tauri.bundle.identifier")
+          
+          echo "product_name=$PRODUCT_NAME" >> $GITHUB_OUTPUT
+          echo "description=$DESCRIPTION" >> $GITHUB_OUTPUT
+          echo "identifier=$IDENTIFIER" >> $GITHUB_OUTPUT
+          
+          # Cask name (lowercase, no spaces)
+          CASK_NAME="timetracker"
+          echo "cask_name=$CASK_NAME" >> $GITHUB_OUTPUT
+
+      - name: Generate Homebrew Cask file
+        run: |
+          VERSION="${{ needs.prepare-artifacts.outputs.version }}"
+          CASK_NAME="${{ steps.metadata.outputs.cask_name }}"
+          PRODUCT_NAME="${{ steps.metadata.outputs.product_name }}"
+          DESCRIPTION="${{ steps.metadata.outputs.description }}"
+          IDENTIFIER="${{ steps.metadata.outputs.identifier }}"
+          DMG_URL="${{ needs.prepare-artifacts.outputs.dmg_url }}"
+          DMG_SHA256="${{ needs.prepare-artifacts.outputs.dmg_sha256 }}"
+          REPO_URL="https://github.com/${{ github.repository }}"
+          
+          cat > "$CASK_NAME.rb" << EOF
+          # typed: false
+          # frozen_string_literal: true
+          
+          # This file was generated by GitHub Actions
+          # Do not edit this file manually
+          
+          cask "$CASK_NAME" do
+            version "$VERSION"
+            sha256 "$DMG_SHA256"
+          
+            url "$DMG_URL"
+            name "$PRODUCT_NAME"
+            desc "$DESCRIPTION"
+            homepage "$REPO_URL"
+          
+            livecheck do
+              url "$REPO_URL"
+              strategy :github_latest
+            end
+          
+            app "$PRODUCT_NAME.app"
+          
+            zap trash: [
+              "~/Library/Application Support/$PRODUCT_NAME",
+              "~/Library/Preferences/$IDENTIFIER.plist",
+            ]
+          end
+          EOF
+          
+          echo "Generated $CASK_NAME.rb"
+
+      - name: Upload Homebrew Cask artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: homebrew-cask
+          path: timetracker.rb
+          retention-days: 30
+
+  generate-apt:
+    needs: prepare-artifacts
+    if: needs.prepare-artifacts.outputs.deb_url != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Get app metadata
+        id: metadata
+        run: |
+          PRODUCT_NAME=$(node -p "require('./backend/tauri.conf.json').package.productName")
+          DESCRIPTION=$(node -p "require('./backend/tauri.conf.json').tauri.bundle.longDescription")
+          SHORT_DESC=$(node -p "require('./backend/tauri.conf.json').tauri.bundle.shortDescription")
+          
+          echo "product_name=$PRODUCT_NAME" >> $GITHUB_OUTPUT
+          echo "description=$DESCRIPTION" >> $GITHUB_OUTPUT
+          echo "short_description=$SHORT_DESC" >> $GITHUB_OUTPUT
+          
+          # Package name (lowercase)
+          PACKAGE_NAME="timetracker"
+          echo "package_name=$PACKAGE_NAME" >> $GITHUB_OUTPUT
+
+      - name: Install dpkg-dev
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dpkg-dev
+
+      - name: Download DEB package
+        run: |
+          curl -L -o timetracker.deb "${{ needs.prepare-artifacts.outputs.deb_url }}"
+
+      - name: Create APT repository structure
+        run: |
+          PACKAGE_NAME="${{ steps.metadata.outputs.package_name }}"
+          VERSION="${{ needs.prepare-artifacts.outputs.version }}"
+          
+          # Create directory structure
+          mkdir -p apt-repo/dists/stable/main/binary-amd64
+          mkdir -p apt-repo/pool/main/t/$PACKAGE_NAME
+          
+          # Copy DEB to pool
+          cp timetracker.deb "apt-repo/pool/main/t/$PACKAGE_NAME/${PACKAGE_NAME}_${VERSION}_amd64.deb"
+
+      - name: Generate Packages file
+        run: |
+          cd apt-repo
+          dpkg-scanpackages --arch amd64 pool/ > dists/stable/main/binary-amd64/Packages
+          gzip -k -f dists/stable/main/binary-amd64/Packages
+
+      - name: Generate Release file
+        run: |
+          cd apt-repo/dists/stable
+          
+          PACKAGES_SIZE=$(stat -c%s main/binary-amd64/Packages)
+          PACKAGES_SHA256=$(sha256sum main/binary-amd64/Packages | cut -d' ' -f1)
+          PACKAGES_GZ_SIZE=$(stat -c%s main/binary-amd64/Packages.gz)
+          PACKAGES_GZ_SHA256=$(sha256sum main/binary-amd64/Packages.gz | cut -d' ' -f1)
+          
+          cat > Release << EOF
+          Origin: TimeTracker
+          Label: TimeTracker APT Repository
+          Suite: stable
+          Codename: stable
+          Version: ${{ needs.prepare-artifacts.outputs.version }}
+          Architectures: amd64
+          Components: main
+          Description: APT repository for TimeTracker - Desktop time tracking application
+          Date: $(date -u +"%a, %d %b %Y %H:%M:%S %Z")
+          SHA256:
+           $PACKAGES_SHA256 $PACKAGES_SIZE main/binary-amd64/Packages
+           $PACKAGES_GZ_SHA256 $PACKAGES_GZ_SIZE main/binary-amd64/Packages.gz
+          EOF
+
+      - name: Generate installation README
+        run: |
+          PACKAGE_NAME="${{ steps.metadata.outputs.package_name }}"
+          REPO_URL="https://github.com/${{ github.repository }}"
+          
+          cat > apt-repo/README.md << EOF
+          # TimeTracker APT Repository
+          
+          This repository contains the Debian/Ubuntu packages for TimeTracker.
+          
+          ## Installation
+          
+          ### Add the repository
+          
+          \`\`\`bash
+          # Download and add the GPG key (if you have one)
+          # curl -fsSL https://your-domain.com/repo.gpg | sudo gpg --dearmor -o /usr/share/keyrings/timetracker.gpg
+          
+          # Add the repository
+          echo "deb [arch=amd64] https://your-domain.com/apt-repo stable main" | sudo tee /etc/apt/sources.list.d/timetracker.list
+          
+          # Update package list
+          sudo apt update
+          
+          # Install TimeTracker
+          sudo apt install $PACKAGE_NAME
+          \`\`\`
+          
+          ## Manual Installation
+          
+          If you prefer to install manually without adding the repository:
+          
+          \`\`\`bash
+          # Option 1: Download from GitHub Releases
+          # Visit: https://github.com/${{ github.repository }}/releases/tag/v${{ needs.prepare-artifacts.outputs.version }}
+          # Download the .deb file and install:
+          sudo dpkg -i <downloaded-file>.deb
+          sudo apt-get install -f
+          
+          # Option 2: Use the .deb file from this repository
+          sudo dpkg -i pool/main/t/$PACKAGE_NAME/${PACKAGE_NAME}_${{ needs.prepare-artifacts.outputs.version }}_amd64.deb
+          sudo apt-get install -f
+          \`\`\`
+          
+          ## Repository Structure
+          
+          This repository follows the standard Debian repository layout:
+          
+          \`\`\`
+          apt-repo/
+          ├── dists/stable/main/binary-amd64/
+          │   ├── Packages
+          │   └── Packages.gz
+          ├── pool/main/t/$PACKAGE_NAME/
+          │   └── ${PACKAGE_NAME}_<version>_amd64.deb
+          └── README.md
+          \`\`\`
+          
+          ## Hosting
+          
+          To host this repository:
+          
+          1. Upload the entire \`apt-repo\` directory to a web server with HTTPS
+          2. Ensure the web server serves files correctly (no .deb file compression)
+          3. Update the installation instructions with your domain
+          4. Optionally add GPG signing for enhanced security
+          
+          For more information, visit: $REPO_URL
+          EOF
+
+      - name: Create APT repository archive
+        run: |
+          cd apt-repo
+          tar -czf ../apt-repository.tar.gz .
+          cd ..
+          zip -r apt-repository.zip apt-repo/
+
+      - name: Upload APT repository artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: apt-repository
+          path: apt-repository.zip
+          retention-days: 30
