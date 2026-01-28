@@ -97,6 +97,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.get_version.outputs.tag }}
+          VERSION: ${{ steps.get_version.outputs.version }}
         run: |
           # Get release by tag using GitHub API
           RELEASE_JSON=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
@@ -106,34 +107,96 @@ jobs:
           RELEASE_ID=$(echo "$RELEASE_JSON" | jq -r '.id')
           echo "release_id=$RELEASE_ID" >> $GITHUB_OUTPUT
           
-          # Find MSI file
-          MSI_ASSET=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | endswith(".msi"))')
+          # Check if release exists
+          if [ "$RELEASE_ID" == "null" ] || [ -z "$RELEASE_ID" ]; then
+            echo "::error::Release not found for tag: ${TAG}"
+            exit 1
+          fi
+          
+          echo "Processing release ${TAG} (version ${VERSION})"
+          echo "Available assets:"
+          echo "$RELEASE_JSON" | jq -r '.assets[] | "  - \(.name)"'
+          
+          # Find MSI file - verify it matches the version
+          # Look for MSI files that contain the version number in the filename
+          MSI_ASSET=$(echo "$RELEASE_JSON" | jq -r --arg version "$VERSION" \
+            '.assets[] | select(.name | endswith(".msi") and contains($version)) | .')
+          
+          if [ -z "$MSI_ASSET" ] || [ "$MSI_ASSET" == "null" ]; then
+            # Fallback: try to find any MSI file if version-specific one not found
+            echo "::warning::No MSI file found matching version ${VERSION}, trying fallback..."
+            MSI_ASSET=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | endswith(".msi")) | .')
+          fi
+          
           if [ -n "$MSI_ASSET" ] && [ "$MSI_ASSET" != "null" ]; then
+            MSI_NAME=$(echo "$MSI_ASSET" | jq -r '.name')
             MSI_URL=$(echo "$MSI_ASSET" | jq -r '.browser_download_url')
             MSI_SIZE=$(echo "$MSI_ASSET" | jq -r '.size')
+            
+            # Verify version matches
+            if [[ "$MSI_NAME" != *"$VERSION"* ]]; then
+              echo "::error::MSI filename '$MSI_NAME' does not contain version '$VERSION'"
+              echo "::error::This mismatch will break installs and SHA validation"
+              exit 1
+            fi
+            
             echo "msi_url=$MSI_URL" >> $GITHUB_OUTPUT
             echo "msi_size=$MSI_SIZE" >> $GITHUB_OUTPUT
-            echo "Found MSI: $MSI_URL"
+            echo "✅ Found MSI matching version ${VERSION}: $MSI_NAME"
           fi
           
-          # Find DMG file
-          DMG_ASSET=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | endswith(".dmg"))')
+          # Find DMG file - verify it matches the version
+          DMG_ASSET=$(echo "$RELEASE_JSON" | jq -r --arg version "$VERSION" \
+            '.assets[] | select(.name | endswith(".dmg") and contains($version)) | .')
+          
+          if [ -z "$DMG_ASSET" ] || [ "$DMG_ASSET" == "null" ]; then
+            # Fallback: try to find any DMG file if version-specific one not found
+            echo "::warning::No DMG file found matching version ${VERSION}, trying fallback..."
+            DMG_ASSET=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | endswith(".dmg")) | .')
+          fi
+          
           if [ -n "$DMG_ASSET" ] && [ "$DMG_ASSET" != "null" ]; then
+            DMG_NAME=$(echo "$DMG_ASSET" | jq -r '.name')
             DMG_URL=$(echo "$DMG_ASSET" | jq -r '.browser_download_url')
             DMG_SIZE=$(echo "$DMG_ASSET" | jq -r '.size')
+            
+            # Verify version matches
+            if [[ "$DMG_NAME" != *"$VERSION"* ]]; then
+              echo "::error::DMG filename '$DMG_NAME' does not contain version '$VERSION'"
+              echo "::error::This mismatch will break installs and SHA validation"
+              exit 1
+            fi
+            
             echo "dmg_url=$DMG_URL" >> $GITHUB_OUTPUT
             echo "dmg_size=$DMG_SIZE" >> $GITHUB_OUTPUT
-            echo "Found DMG: $DMG_URL"
+            echo "✅ Found DMG matching version ${VERSION}: $DMG_NAME"
           fi
           
-          # Find DEB file
-          DEB_ASSET=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | endswith(".deb"))')
+          # Find DEB file - verify it matches the version
+          DEB_ASSET=$(echo "$RELEASE_JSON" | jq -r --arg version "$VERSION" \
+            '.assets[] | select(.name | endswith(".deb") and contains($version)) | .')
+          
+          if [ -z "$DEB_ASSET" ] || [ "$DEB_ASSET" == "null" ]; then
+            # Fallback: try to find any DEB file if version-specific one not found
+            echo "::warning::No DEB file found matching version ${VERSION}, trying fallback..."
+            DEB_ASSET=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | endswith(".deb")) | .')
+          fi
+          
           if [ -n "$DEB_ASSET" ] && [ "$DEB_ASSET" != "null" ]; then
+            DEB_NAME=$(echo "$DEB_ASSET" | jq -r '.name')
             DEB_URL=$(echo "$DEB_ASSET" | jq -r '.browser_download_url')
             DEB_SIZE=$(echo "$DEB_ASSET" | jq -r '.size')
+            
+            # Verify version matches
+            if [[ "$DEB_NAME" != *"$VERSION"* ]]; then
+              echo "::error::DEB filename '$DEB_NAME' does not contain version '$VERSION'"
+              echo "::error::This mismatch will break installs and SHA validation"
+              exit 1
+            fi
+            
             echo "deb_url=$DEB_URL" >> $GITHUB_OUTPUT
             echo "deb_size=$DEB_SIZE" >> $GITHUB_OUTPUT
-            echo "Found DEB: $DEB_URL"
+            echo "✅ Found DEB matching version ${VERSION}: $DEB_NAME"
           fi
 
       - name: Download and calculate checksums
@@ -187,9 +250,10 @@ jobs:
           Add-Content -Path $env:GITHUB_OUTPUT -Value "description=$DESCRIPTION"
           Add-Content -Path $env:GITHUB_OUTPUT -Value "short_description=$SHORT_DESC"
           
-          # Publisher name (first letter of product name for manifest path)
-          $PUBLISHER = "TimeTracker"
-          $PACKAGE_ID = "TimeTracker.TimeTracker"
+          # Publisher name (GitHub username) and PackageIdentifier
+          # PackageIdentifier format: <Publisher>.<PackageName>
+          $PUBLISHER = "bthos"
+          $PACKAGE_ID = "$PUBLISHER.$PRODUCT_NAME"
           Add-Content -Path $env:GITHUB_OUTPUT -Value "publisher=$PUBLISHER"
           Add-Content -Path $env:GITHUB_OUTPUT -Value "package_id=$PACKAGE_ID"
 
@@ -199,10 +263,11 @@ jobs:
           $PUBLISHER = "${{ steps.metadata.outputs.publisher }}"
           $PACKAGE_NAME = "${{ steps.metadata.outputs.product_name }}"
           
-          # Create directory: manifests/t/TimeTracker/0.2.3/
-          New-Item -ItemType Directory -Force -Path "manifests\t\$PACKAGE_NAME\$VERSION" | Out-Null
+          # Create directory: manifests/t/bthos/TimeTracker/0.2.3/
+          # Structure: manifests/t/<Publisher>/<PackageName>/<Version>/
+          New-Item -ItemType Directory -Force -Path "manifests\t\$PUBLISHER\$PACKAGE_NAME\$VERSION" | Out-Null
 
-      - name: Generate defaultLocale.yaml
+      - name: Generate locale manifest
         run: |
           $VERSION = "${{ needs.prepare-artifacts.outputs.version }}"
           $PACKAGE_ID = "${{ steps.metadata.outputs.package_id }}"
@@ -211,11 +276,16 @@ jobs:
           $DESCRIPTION = "${{ steps.metadata.outputs.description }}"
           $SHORT_DESC = "${{ steps.metadata.outputs.short_description }}"
           
-          $MANIFEST_PATH = "manifests\t\$PRODUCT_NAME\$VERSION\defaultLocale.yaml"
+          # Filename format: <PackageIdentifier>.locale.<language-code>.yaml
+          $LOCALE_FILENAME = "$PACKAGE_ID.locale.en-US.yaml"
+          $MANIFEST_PATH = "manifests\t\$PUBLISHER\$PRODUCT_NAME\$VERSION\$LOCALE_FILENAME"
           
+          # Generate defaultLocale manifest according to multi-file schema v1.4.0
           $manifestContent = "# Created with GitHub Actions`n"
           $manifestContent += "PackageIdentifier: $PACKAGE_ID`n"
-          $manifestContent += "Version: $VERSION`n"
+          $manifestContent += "PackageVersion: $VERSION`n"
+          $manifestContent += "ManifestType: defaultLocale`n"
+          $manifestContent += "ManifestVersion: 1.4.0`n"
           $manifestContent += "PackageLocale: en-US`n"
           $manifestContent += "Publisher: $PUBLISHER`n"
           $manifestContent += "PublisherUrl: https://github.com/${{ github.repository }}`n"
@@ -238,44 +308,55 @@ jobs:
           
           Set-Content -Path $MANIFEST_PATH -Value $manifestContent -Encoding UTF8
 
-      - name: Generate installer.yaml
+      - name: Generate installer manifest
         run: |
           $VERSION = "${{ needs.prepare-artifacts.outputs.version }}"
           $PACKAGE_ID = "${{ steps.metadata.outputs.package_id }}"
+          $PUBLISHER = "${{ steps.metadata.outputs.publisher }}"
           $PRODUCT_NAME = "${{ steps.metadata.outputs.product_name }}"
           $MSI_URL = "${{ needs.prepare-artifacts.outputs.msi_url }}"
           $MSI_SHA256 = "${{ needs.prepare-artifacts.outputs.msi_sha256 }}"
           
-          $MANIFEST_PATH = "manifests\t\$PRODUCT_NAME\$VERSION\installer.yaml"
+          # Filename format: <PackageIdentifier>.installer.yaml
+          $INSTALLER_FILENAME = "$PACKAGE_ID.installer.yaml"
+          $MANIFEST_PATH = "manifests\t\$PUBLISHER\$PRODUCT_NAME\$VERSION\$INSTALLER_FILENAME"
           
+          # Generate installer manifest according to multi-file schema v1.4.0
           $manifestContent = "# Created with GitHub Actions`n"
           $manifestContent += "PackageIdentifier: $PACKAGE_ID`n"
-          $manifestContent += "Version: $VERSION`n"
-          $manifestContent += "InstallerType: msi`n"
-          $manifestContent += "Architecture: x64`n"
-          $manifestContent += "InstallerUrl: $MSI_URL`n"
-          $manifestContent += "InstallerSha256: $MSI_SHA256`n"
-          $manifestContent += "InstallerSwitches:`n"
-          $manifestContent += "  Silent: `"/quiet`"`n"
-          $manifestContent += "  SilentWithProgress: `"/quiet /norestart`"`n"
-          $manifestContent += "InstallModes:`n"
-          $manifestContent += "  - silent`n"
-          $manifestContent += "  - silentWithProgress`n"
-          $manifestContent += "Scope: machine`n"
+          $manifestContent += "PackageVersion: $VERSION`n"
+          $manifestContent += "ManifestType: installer`n"
+          $manifestContent += "ManifestVersion: 1.4.0`n"
+          $manifestContent += "Installers:`n"
+          $manifestContent += "  - InstallerIdentifier: $PACKAGE_ID`n"
+          $manifestContent += "    InstallerType: msi`n"
+          $manifestContent += "    Architecture: x64`n"
+          $manifestContent += "    InstallerUrl: $MSI_URL`n"
+          $manifestContent += "    InstallerSha256: $MSI_SHA256`n"
+          $manifestContent += "    InstallerSwitches:`n"
+          $manifestContent += "      Silent: `"/quiet`"`n"
+          $manifestContent += "      SilentWithProgress: `"/quiet /norestart`"`n"
+          $manifestContent += "    InstallModes:`n"
+          $manifestContent += "      - silent`n"
+          $manifestContent += "      - silentWithProgress`n"
+          $manifestContent += "    Scope: machine`n"
           
           Set-Content -Path $MANIFEST_PATH -Value $manifestContent -Encoding UTF8
 
-      - name: Generate version.yaml
+      - name: Generate version manifest
         run: |
           $VERSION = "${{ needs.prepare-artifacts.outputs.version }}"
           $PACKAGE_ID = "${{ steps.metadata.outputs.package_id }}"
+          $PUBLISHER = "${{ steps.metadata.outputs.publisher }}"
           $PRODUCT_NAME = "${{ steps.metadata.outputs.product_name }}"
           
-          $MANIFEST_PATH = "manifests\t\$PRODUCT_NAME\$VERSION\version.yaml"
+          # Filename format: <PackageIdentifier>.yaml
+          $VERSION_FILENAME = "$PACKAGE_ID.yaml"
+          $MANIFEST_PATH = "manifests\t\$PUBLISHER\$PRODUCT_NAME\$VERSION\$VERSION_FILENAME"
           
           $manifestContent = "# Created with GitHub Actions`n"
           $manifestContent += "PackageIdentifier: $PACKAGE_ID`n"
-          $manifestContent += "Version: $VERSION`n"
+          $manifestContent += "PackageVersion: $VERSION`n"
           $manifestContent += "DefaultLocale: en-US`n"
           $manifestContent += "ManifestType: version`n"
           $manifestContent += "ManifestVersion: 1.4.0`n"
@@ -311,11 +392,25 @@ jobs:
         run: |
           # Read from tauri.conf.json
           PRODUCT_NAME=$(node -p "require('./backend/tauri.conf.json').package.productName")
-          DESCRIPTION=$(node -p "require('./backend/tauri.conf.json').tauri.bundle.longDescription")
+          LONG_DESC=$(node -p "require('./backend/tauri.conf.json').tauri.bundle.longDescription")
+          SHORT_DESC=$(node -p "require('./backend/tauri.conf.json').tauri.bundle.shortDescription")
           IDENTIFIER=$(node -p "require('./backend/tauri.conf.json').tauri.bundle.identifier")
+          
+          # Use short description for Homebrew (max 80 chars recommended, but can be longer)
+          # Homebrew allows up to 80 chars for desc, but will accept longer
+          DESCRIPTION="$SHORT_DESC"
+          
+          # Ensure description is not empty
+          if [ -z "$DESCRIPTION" ] || [ "$DESCRIPTION" = "null" ]; then
+            DESCRIPTION="Desktop time tracking application"
+          fi
+          
+          # Remove any newlines and extra spaces
+          DESCRIPTION=$(echo "$DESCRIPTION" | tr '\n' ' ' | sed 's/  */ /g' | sed 's/^ *//;s/ *$//')
           
           echo "product_name=$PRODUCT_NAME" >> $GITHUB_OUTPUT
           echo "description=$DESCRIPTION" >> $GITHUB_OUTPUT
+          echo "long_description=$LONG_DESC" >> $GITHUB_OUTPUT
           echo "identifier=$IDENTIFIER" >> $GITHUB_OUTPUT
           
           # Cask name (lowercase, no spaces)
@@ -323,47 +418,104 @@ jobs:
           echo "cask_name=$CASK_NAME" >> $GITHUB_OUTPUT
 
       - name: Generate Homebrew Cask file
+        env:
+          VERSION: ${{ needs.prepare-artifacts.outputs.version }}
+          CASK_NAME: ${{ steps.metadata.outputs.cask_name }}
+          PRODUCT_NAME: ${{ steps.metadata.outputs.product_name }}
+          DESCRIPTION: ${{ steps.metadata.outputs.description }}
+          IDENTIFIER: ${{ steps.metadata.outputs.identifier }}
+          DMG_URL: ${{ needs.prepare-artifacts.outputs.dmg_url }}
+          DMG_SHA256: ${{ needs.prepare-artifacts.outputs.dmg_sha256 }}
+          REPO_URL: https://github.com/${{ github.repository }}
         run: |
-          VERSION="${{ needs.prepare-artifacts.outputs.version }}"
-          CASK_NAME="${{ steps.metadata.outputs.cask_name }}"
-          PRODUCT_NAME="${{ steps.metadata.outputs.product_name }}"
-          DESCRIPTION="${{ steps.metadata.outputs.description }}"
-          IDENTIFIER="${{ steps.metadata.outputs.identifier }}"
-          DMG_URL="${{ needs.prepare-artifacts.outputs.dmg_url }}"
-          DMG_SHA256="${{ needs.prepare-artifacts.outputs.dmg_sha256 }}"
-          REPO_URL="https://github.com/${{ github.repository }}"
+          # Generate cask file using Ruby for proper string escaping
+          ruby << 'RUBYSCRIPT'
+          require 'erb'
           
-          cat > "$CASK_NAME.rb" << EOF
+          cask_name = ENV['CASK_NAME']
+          version = ENV['VERSION']
+          url = ENV['DMG_URL']
+          name = ENV['PRODUCT_NAME']
+          desc = ENV['DESCRIPTION']
+          homepage = ENV['REPO_URL']
+          identifier = ENV['IDENTIFIER']
+          
+          # Ensure description doesn't exceed Homebrew limits
+          desc = desc[0, 80] if desc.length > 80
+          
+          # Always use :no_check for GitHub Releases URLs
+          # Homebrew requires :no_check when URL doesn't contain version in filename
+          # GitHub Releases URLs have version in path but not in filename, so :no_check is required
+          use_no_check = true
+          
+          template = <<~TEMPLATE
           # typed: false
           # frozen_string_literal: true
           
           # This file was generated by GitHub Actions
           # Do not edit this file manually
           
-          cask "$CASK_NAME" do
-            version "$VERSION"
-            sha256 "$DMG_SHA256"
+          # Note: This cask requires the DMG to be signed and notarized by Apple
+          # for Homebrew Cask acceptance. Please ensure your releases are properly
+          # signed before submitting PRs to homebrew/homebrew-cask.
           
-            url "$DMG_URL"
-            name "$PRODUCT_NAME"
-            desc "$DESCRIPTION"
-            homepage "$REPO_URL"
+          cask "<%= cask_name %>" do
+            version "<%= version %>"
+          <% if use_no_check %>
+            sha256 :no_check
+          <% else %>
+            sha256 "<%= ENV['DMG_SHA256'] %>"
+          <% end %>
+          
+            url "<%= url %>"
+            name "<%= name %>"
+            desc "<%= desc %>"
+            homepage "<%= homepage %>"
           
             livecheck do
-              url "$REPO_URL"
+              url "<%= homepage %>"
               strategy :github_latest
             end
           
-            app "$PRODUCT_NAME.app"
+            app "<%= name %>.app"
           
             zap trash: [
-              "~/Library/Application Support/$PRODUCT_NAME",
-              "~/Library/Preferences/$IDENTIFIER.plist",
+              "~/Library/Application Support/<%= name %>",
+              "~/Library/Preferences/<%= identifier %>.plist",
             ]
           end
-          EOF
+          TEMPLATE
           
-          echo "Generated $CASK_NAME.rb"
+          erb = ERB.new(template)
+          result = erb.result(binding)
+          
+          File.write("#{cask_name}.rb", result)
+          puts "Generated #{cask_name}.rb"
+          puts "Using sha256 :no_check: #{use_no_check}"
+          RUBYSCRIPT
+          
+          echo "Cask file content:"
+          cat "$CASK_NAME.rb"
+          
+          # Basic syntax validation using Ruby
+          echo "Validating Ruby syntax..."
+          if ruby -c "$CASK_NAME.rb"; then
+            echo "✅ Ruby syntax is valid"
+          else
+            echo "❌ Ruby syntax error"
+            exit 1
+          fi
+          
+          # Validate with Homebrew if available (optional)
+          if command -v brew &> /dev/null 2>&1; then
+            echo "Validating with Homebrew..."
+            brew tap homebrew/cask 2>/dev/null || true
+            brew style "$CASK_NAME.rb" 2>&1 | head -50 || echo "Style warnings (non-fatal)"
+            brew audit --cask "$CASK_NAME.rb" 2>&1 | head -50 || echo "Audit warnings (non-fatal)"
+          else
+            echo "Homebrew not available, skipping advanced validation"
+            echo "Note: Cask will be validated by Homebrew CI after PR creation"
+          fi
 
       - name: Upload Homebrew Cask artifact
         uses: actions/upload-artifact@v4
@@ -673,21 +825,22 @@ jobs:
           git checkout -b "$BRANCH_NAME"
           
           # Create directory structure if it doesn't exist
-          mkdir -p manifests/t/TimeTracker
+          # Structure: manifests/t/<Publisher>/<PackageName>/<Version>/
+          mkdir -p manifests/t/bthos/TimeTracker
           
           # Copy manifests to correct location
-          # Structure: manifests/t/TimeTracker/VERSION/
-          if [ -d "../winget-manifests/manifests/t/TimeTracker/$VERSION" ]; then
-            cp -r ../winget-manifests/manifests/t/TimeTracker/$VERSION manifests/t/TimeTracker/
+          # Structure: manifests/t/bthos/TimeTracker/VERSION/
+          if [ -d "../winget-manifests/manifests/t/bthos/TimeTracker/$VERSION" ]; then
+            cp -r ../winget-manifests/manifests/t/bthos/TimeTracker/$VERSION manifests/t/bthos/TimeTracker/
           else
-            echo "::error::Manifest directory not found: ../winget-manifests/manifests/t/TimeTracker/$VERSION"
+            echo "::error::Manifest directory not found: ../winget-manifests/manifests/t/bthos/TimeTracker/$VERSION"
             ls -la ../winget-manifests/manifests/t/ || echo "Manifests directory structure:"
-            find ../winget-manifests -type d -name "*TimeTracker*" || echo "No TimeTracker directories found"
+            find ../winget-manifests -type d -name "*bthos*" -o -name "*TimeTracker*" || echo "No manifest directories found"
             exit 1
           fi
           
           # Stage changes
-          git add manifests/t/TimeTracker/$VERSION/
+          git add manifests/t/bthos/TimeTracker/$VERSION/
           
           # Commit
           git commit -m "Add TimeTracker version $VERSION"
