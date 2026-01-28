@@ -269,6 +269,44 @@ jobs:
             libayatana-appindicator3-dev \
             librsvg2-dev
 
+      - name: Update version in files before build
+        run: |
+          VERSION="${{ needs.prepare-release.outputs.version }}"
+          
+          # Update package.json
+          node << EOF
+          const fs = require('fs');
+          const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          packageJson.version = "$VERSION";
+          fs.writeFileSync('package.json', JSON.stringify(packageJson, null, 2) + '\n');
+          EOF
+          
+          # Update Cargo.toml (cross-platform)
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            # PowerShell for Windows
+            powershell -Command "(Get-Content backend/Cargo.toml) -replace '^version = \".*\"', 'version = \"$VERSION\"' | Set-Content backend/Cargo.toml"
+          else
+            # sed for Linux/macOS
+            sed -i "s/^version = \".*\"/version = \"$VERSION\"/" backend/Cargo.toml
+          fi
+          
+          # Update tauri.conf.json
+          node << EOF
+          const fs = require('fs');
+          const config = JSON.parse(fs.readFileSync('backend/tauri.conf.json', 'utf8'));
+          config.package.version = "$VERSION";
+          fs.writeFileSync('backend/tauri.conf.json', JSON.stringify(config, null, 2) + '\n');
+          EOF
+          
+          echo "Updated all version files to $VERSION"
+          echo "package.json version: $(node -p \"require('./package.json').version\")"
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            echo "Cargo.toml version: $(powershell -Command \"(Get-Content backend/Cargo.toml | Select-String '^version =').Line\")"
+          else
+            echo "Cargo.toml version: $(grep '^version =' backend/Cargo.toml)"
+          fi
+          echo "tauri.conf.json version: $(node -p \"require('./backend/tauri.conf.json').package.version\")"
+
       - name: Build frontend
         run: npm run build
 
