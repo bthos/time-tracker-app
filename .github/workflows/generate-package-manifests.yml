@@ -375,6 +375,9 @@ jobs:
           retention-days: 30
 
   generate-homebrew:
+    # NOTE: Cask file is generated but PR creation is disabled
+    # Homebrew Cask requires signed and notarized DMG files
+    # The cask file is still generated for future use when signing is configured
     needs: prepare-artifacts
     if: needs.prepare-artifacts.outputs.dmg_url != ''
     runs-on: ubuntu-latest
@@ -940,15 +943,24 @@ jobs:
           fi
 
   create-homebrew-pr:
+    # DISABLED: Homebrew Cask requires signed and notarized DMG files
+    # To enable this job:
+    # 1. Set up Apple Developer account and code signing certificates
+    # 2. Configure APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD, APPLE_ID, APPLE_PASSWORD, APPLE_TEAM_ID secrets
+    # 3. Update tauri.conf.json with signingIdentity and providerShortName
+    # 4. Update release.yml workflow to sign and notarize DMG during build
+    # 5. Change the condition below from 'false' to the original condition
     needs: [prepare-artifacts, generate-homebrew]
-    if: |
-      always() &&
-      (needs.prepare-artifacts.result == 'success') &&
-      (needs.generate-homebrew.result == 'success') &&
-      (
-        (github.event_name == 'workflow_dispatch' && github.event.inputs.create_prs == 'true') ||
-        (github.event_name == 'release')
-      )
+    if: false
+    # Original condition (commented out):
+    # if: |
+    #   always() &&
+    #   (needs.prepare-artifacts.result == 'success') &&
+    #   (needs.generate-homebrew.result == 'success') &&
+    #   (
+    #     (github.event_name == 'workflow_dispatch' && github.event.inputs.create_prs == 'true') ||
+    #     (github.event_name == 'release')
+    #   )
     runs-on: ubuntu-latest
     permissions:
       contents: write
