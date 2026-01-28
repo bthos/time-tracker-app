@@ -1617,7 +1617,7 @@ const Settings: React.FC<SettingsProps> = () => {
           Time Tracker
         </h2>
         <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 mb-3 sm:mb-4">
-          Version 0.2.0
+          Version {import.meta.env.VITE_APP_VERSION || 'Stable Release'}
         </p>
         <p className="text-sm sm:text-base text-gray-700 dark:text-gray-300 max-w-md mx-auto px-4">
           Desktop application for automatic time tracking with smart idle time handling.
