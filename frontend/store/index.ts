@@ -232,16 +232,9 @@ const store = create<AppState>()(
         }),
 
       incrementConsecutiveWork: () =>
-        set((state) => {
-          const newCount = state.consecutiveWorkCount + 1;
-          console.log('[Store] incrementConsecutiveWork:', state.consecutiveWorkCount, '->', newCount);
-          // #region agent log
-          fetch('http://127.0.0.1:7250/ingest/88d94c84-1935-401d-8623-faad62dde354',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'store/index.ts:234',message:'incrementConsecutiveWork',data:{oldCount:state.consecutiveWorkCount,newCount},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-          // #endregion
-          return {
-            consecutiveWorkCount: newCount,
-          };
-        }),
+        set((state) => ({
+          consecutiveWorkCount: state.consecutiveWorkCount + 1,
+        })),
 
       incrementConsecutiveBreak: () =>
         set((state) => ({
@@ -249,15 +242,9 @@ const store = create<AppState>()(
         })),
 
       resetConsecutiveSessions: () =>
-        set((state) => {
-          console.log('[Store] resetConsecutiveSessions:', state.consecutiveWorkCount, state.consecutiveBreakCount, '-> 0, 0');
-          // #region agent log
-          fetch('http://127.0.0.1:7250/ingest/88d94c84-1935-401d-8623-faad62dde354',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'store/index.ts:248',message:'resetConsecutiveSessions called',data:{oldConsecutiveWorkCount:state.consecutiveWorkCount,oldConsecutiveBreakCount:state.consecutiveBreakCount},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-          // #endregion
-          return {
-            consecutiveWorkCount: 0,
-            consecutiveBreakCount: 0,
-          };
+        set({
+          consecutiveWorkCount: 0,
+          consecutiveBreakCount: 0,
         }),
 
       syncPomodoroCounterFromDB: async () => {

@@ -88,24 +88,10 @@ const PomodoroTimer: React.FC = () => {
   // TODO 8: Проверить race conditions: может ли модальное окно закрыться до того, как сработает автоподтверждение
   // Handle completed session and show modal (auto-confirm is handled by the modal itself)
   useEffect(() => {
-    // #region agent log
-    fetch('http://127.0.0.1:7250/ingest/88d94c84-1935-401d-8623-faad62dde354',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'PomodoroTimer.tsx:89',message:'useEffect triggered',data:{completedSessionType,showTransitionModal},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'H'})}).catch(()=>{});
-    // #endregion
     if (completedSessionType === 'work') {
-      // #region agent log
-      const { consecutiveWorkCount } = store.getState();
-      const threshold = settings.pomodoro_sessions_until_long_break ?? 4;
-      fetch('http://127.0.0.1:7250/ingest/88d94c84-1935-401d-8623-faad62dde354',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'PomodoroTimer.tsx:91',message:'Work session completed - before getNextBreakType',data:{consecutiveWorkCount,threshold},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'H'})}).catch(()=>{});
-      // #endregion
       const breakType = getNextBreakType();
-      // #region agent log
-      fetch('http://127.0.0.1:7250/ingest/88d94c84-1935-401d-8623-faad62dde354',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'PomodoroTimer.tsx:93',message:'Work session completed - after getNextBreakType',data:{breakType},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'H'})}).catch(()=>{});
-      // #endregion
       setNextSessionType('break');
       setNextBreakType(breakType);
-      // #region agent log
-      fetch('http://127.0.0.1:7250/ingest/88d94c84-1935-401d-8623-faad62dde354',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'PomodoroTimer.tsx:97',message:'Setting showTransitionModal to true',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'H'})}).catch(()=>{});
-      // #endregion
       setShowTransitionModal(true);
       isConfirmingRef.current = false; // Reset flag when showing new modal
     } else if (completedSessionType === 'break') {
@@ -295,12 +281,6 @@ const PomodoroTimer: React.FC = () => {
           <Card>
             <div className="flex flex-col items-center p-8">
               {/* Suggested Type Indicator */}
-              {(() => {
-                // #region agent log
-                fetch('http://127.0.0.1:7250/ingest/88d94c84-1935-401d-8623-faad62dde354',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'PomodoroTimer.tsx:298',message:'Checking suggestedNextType display',data:{is_running:status.is_running,suggestedNextType},timestamp:Date.now(),sessionId:'debug-session',runId:'run3',hypothesisId:'L'})}).catch(()=>{});
-                // #endregion
-                return null;
-              })()}
               {!status.is_running && suggestedNextType !== null && (
                 <div className="w-full mb-4 flex justify-center">
                   <div className={`flex flex-col items-center gap-1 px-4 py-3 rounded-lg border-2 ${

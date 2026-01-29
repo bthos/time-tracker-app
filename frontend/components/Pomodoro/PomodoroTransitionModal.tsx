@@ -32,13 +32,7 @@ const PomodoroTransitionModal: React.FC<PomodoroTransitionModalProps> = ({
     onConfirmRef.current = onConfirm;
   }, [onConfirm]);
 
-  // TODO: Проверить автопереход между сессиями Work и Break
-  // TODO 5: Проверить логику автоподтверждения: таймер countdown запускается и вызывает onConfirm
-  // TODO 10: Добавить логирование для отладки автоподтверждения
   useEffect(() => {
-    // #region agent log
-    fetch('http://127.0.0.1:7250/ingest/88d94c84-1935-401d-8623-faad62dde354',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'PomodoroTransitionModal.tsx:38',message:'Modal useEffect triggered',data:{isOpen,autoConfirmDelay},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'I'})}).catch(()=>{});
-    // #endregion
     if (!isOpen) {
       setCountdown(autoConfirmDelay);
       hasConfirmedRef.current = false;
@@ -51,17 +45,10 @@ const PomodoroTransitionModal: React.FC<PomodoroTransitionModalProps> = ({
     }
 
     // If auto-transition is disabled (delay = 0), don't start countdown
-    // TODO: Проверить, что настройка не равна 0 (иначе автопереход отключен)
     if (autoConfirmDelay === 0) {
-      // #region agent log
-      fetch('http://127.0.0.1:7250/ingest/88d94c84-1935-401d-8623-faad62dde354',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'PomodoroTransitionModal.tsx:52',message:'Auto-transition disabled (delay = 0)',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'I'})}).catch(()=>{});
-      // #endregion
       return;
     }
 
-    // #region agent log
-    fetch('http://127.0.0.1:7250/ingest/88d94c84-1935-401d-8623-faad62dde354',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'PomodoroTransitionModal.tsx:56',message:'Starting countdown timer',data:{autoConfirmDelay},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'I'})}).catch(()=>{});
-    // #endregion
     hasConfirmedRef.current = false;
     timerRef.current = setInterval(() => {
       setCountdown((prev) => {
@@ -73,10 +60,6 @@ const PomodoroTransitionModal: React.FC<PomodoroTransitionModalProps> = ({
           // Prevent multiple calls
           if (!hasConfirmedRef.current) {
             hasConfirmedRef.current = true;
-            // #region agent log
-            fetch('http://127.0.0.1:7250/ingest/88d94c84-1935-401d-8623-faad62dde354',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'PomodoroTransitionModal.tsx:68',message:'Calling onConfirm (auto-transition)',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'I'})}).catch(()=>{});
-            // #endregion
-            // TODO: Проверить, что onConfirmRef.current() вызывается и запускает следующую сессию
             onConfirmRef.current();
           }
           return 0;
