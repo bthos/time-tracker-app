@@ -38,7 +38,7 @@ impl WindowTracker {
     /// Get the currently active window using native APIs
     pub fn get_active_window(&self) -> Option<WindowInfo> {
         match get_active_window() {
-            Ok(_active_window) => {
+            Ok(active_window) => {
                 #[cfg(windows)]
                 {
                     // Use Windows APIs to get window title and process name
