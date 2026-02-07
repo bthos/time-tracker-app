@@ -10,6 +10,7 @@ import { formatDuration } from '../../utils/format';
 import { exportData } from '../../utils/export';
 import { presetToDateRange } from '../../store';
 import { api } from '../../services/api';
+import LoadingSpinner from '../Common/LoadingSpinner';
 import { Filter, X, DollarSign } from 'lucide-react';
 type TimePeriod = 'today' | 'week' | 'month';
 
@@ -19,14 +20,16 @@ export const Reports: React.FC = () => {
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
   const [selectedDomain, setSelectedDomain] = useState<string | null>(null);
   
-  const { data: activities = [] } = useActivities();
-  const { data: categories = [] } = useCategories();
-  const { projects = [] } = useProjects(false);
-  const { tasks: allTasks = [] } = useTasks(selectedProjectId || undefined, false);
+  const { data: activities = [], isLoading: activitiesLoading } = useActivities();
+  const { data: categories = [], isLoading: categoriesLoading } = useCategories();
+  const { projects = [], loading: projectsLoading } = useProjects(false);
+  const { tasks: allTasks = [], loading: tasksLoading } = useTasks(selectedProjectId || undefined, false);
   
   // Get date range for focus sessions
   const dateRange = useMemo(() => presetToDateRange(period, new Date()), [period]);
-  const { sessions: focusSessions = [] } = useFocusSessions(dateRange);
+  const { sessions: focusSessions = [], loading: focusSessionsLoading } = useFocusSessions(dateRange);
+  
+  const isLoading = activitiesLoading || categoriesLoading || projectsLoading || tasksLoading || focusSessionsLoading;
   
   // Calculate Pomodoro statistics
   const pomodoroStats = useMemo(() => {
@@ -292,6 +295,14 @@ export const Reports: React.FC = () => {
       defaultFileName: `timetracker-report-${period}`,
     });
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <LoadingSpinner />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 sm:space-y-6 lg:space-y-8">

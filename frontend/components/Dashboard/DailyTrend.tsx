@@ -3,6 +3,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 import { useStore } from '../../store';
 import { useActivities } from '../../hooks';
 import { useCategories } from '../../hooks/useCategories';
+import LoadingSpinner from '../Common/LoadingSpinner';
 import { differenceInCalendarDays, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 
 export default function DailyTrend() {
@@ -23,8 +24,8 @@ export default function DailyTrend() {
       : null
   );
   
-  const { data: activities = [] } = useActivities();
-  const { data: allCategories = [] } = useCategories();
+  const { data: activities = [], isLoading: activitiesLoading } = useActivities();
+  const { data: allCategories = [], isLoading: categoriesLoading } = useCategories();
   
   const { start, end } = useMemo(() => {
     const now = new Date();
@@ -117,7 +118,24 @@ export default function DailyTrend() {
     }));
   }, [activities, allCategories, start, end, daysDiff]);
 
-  if (isSingleDay || dailyStats.length === 0) {
+  if (isSingleDay) {
+    return null;
+  }
+
+  if (activitiesLoading || categoriesLoading) {
+    return (
+      <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+          Daily Trend
+        </h3>
+        <div className="flex items-center justify-center h-64">
+          <LoadingSpinner />
+        </div>
+      </div>
+    );
+  }
+
+  if (dailyStats.length === 0) {
     return null;
   }
 

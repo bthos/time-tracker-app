@@ -70,7 +70,7 @@ export default function BillableWidget() {
     }
   }, [dateRangePreset, customStartTimestamp, customEndTimestamp]);
 
-  const { data: activities } = useQuery({
+  const { data: activities, isLoading: activitiesLoading } = useQuery({
     queryKey: ['activities', dateRange.start.getTime(), dateRange.end.getTime()],
     queryFn: () => api.activities.getActivities(dateRange),
   });
@@ -85,7 +85,7 @@ export default function BillableWidget() {
     queryFn: () => api.billable.getBillableRevenue(dateRange),
   });
 
-  const isLoading = hoursLoading || revenueLoading;
+  const isLoading = activitiesLoading || hoursLoading || revenueLoading;
 
   const totalHours = useMemo(() => {
     if (!activities || activities.length === 0) return 0;

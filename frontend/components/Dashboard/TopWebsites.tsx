@@ -57,12 +57,12 @@ export default function TopWebsites() {
     }
   }, [dateRangePreset, customStartTimestamp, customEndTimestamp]);
 
-  const { data: domains, isLoading } = useQuery({
+  const { data: domains, isLoading: domainsLoading } = useQuery({
     queryKey: ['topDomains', dateRange.start.getTime(), dateRange.end.getTime()],
     queryFn: () => api.domains.getTopDomains(dateRange, 10),
   });
 
-  const { data: activities } = useQuery({
+  const { data: activities, isLoading: activitiesLoading } = useQuery({
     queryKey: ['activities', dateRange.start.getTime(), dateRange.end.getTime()],
     queryFn: () => api.activities.getActivities(dateRange),
   });
@@ -73,6 +73,8 @@ export default function TopWebsites() {
       .filter(a => !a.is_idle && a.domain)
       .reduce((sum, a) => sum + a.duration_sec, 0);
   }, [activities]);
+
+  const isLoading = domainsLoading || activitiesLoading;
 
   if (isLoading) {
     return (
