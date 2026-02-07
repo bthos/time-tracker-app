@@ -67,6 +67,25 @@ export function useDailyStats(date?: Date) {
   });
 }
 
+/** Aggregated stats for a date range (multi-day). Uses get_stats backend (SQL aggregation). */
+export function useStatsForRange(range: { start: Date; end: Date } | null) {
+  const isMultiDay = range && range.start.toDateString() !== range.end.toDateString();
+  const startTs = range?.start.getTime() ?? 0;
+  const endTs = range?.end.getTime() ?? 0;
+
+  return useQuery({
+    queryKey: ['statsRange', startTs, endTs],
+    queryFn: async () => {
+      if (!range) throw new Error('No range');
+      return await withTimeout(api.stats.getStats(range), 10000);
+    },
+    enabled: Boolean(isMultiDay && range),
+    retry: 1,
+    retryDelay: 1000,
+    gcTime: 5 * 60 * 1000,
+  });
+}
+
 export function useTimeline(_date?: Date) {
   const { data: activities, isLoading, error } = useActivities();
   const categories = useStore((state) => state.categories);
@@ -113,6 +132,7 @@ export function useUpdateActivityCategory() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['activities'] });
       queryClient.invalidateQueries({ queryKey: ['dailyStats'] });
+      queryClient.invalidateQueries({ queryKey: ['statsRange'] });
       queryClient.invalidateQueries({ queryKey: ['timeline'] });
       queryClient.invalidateQueries({ queryKey: ['todayTotal'] });
     },
@@ -127,6 +147,7 @@ export function useDeleteActivity() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['activities'] });
       queryClient.invalidateQueries({ queryKey: ['dailyStats'] });
+      queryClient.invalidateQueries({ queryKey: ['statsRange'] });
       queryClient.invalidateQueries({ queryKey: ['timeline'] });
       queryClient.invalidateQueries({ queryKey: ['todayTotal'] });
     },

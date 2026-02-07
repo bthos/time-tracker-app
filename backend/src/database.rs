@@ -1678,87 +1678,81 @@ impl Database {
         Ok(())
     }
 
-    /// Get daily stats
+    /// Get daily stats (SQL aggregation — no full activity load)
     pub fn get_daily_stats(&self, date: i64) -> Result<DailyStats> {
         let start = date;
         let end = date + 86400; // 24 hours
-
-        let activities = self.get_activities(start, end)?;
         let categories = self.get_categories()?;
-
-        let total_seconds: i64 = activities.iter().filter(|a| !a.is_idle).map(|a| a.duration_sec).sum();
-
-        let productive_seconds: i64 = activities
+        let cat_map: std::collections::HashMap<i64, Category> = categories
             .iter()
-            .filter(|a| !a.is_idle)
-            .filter(|a| {
-                if let Some(cat_id) = a.category_id {
-                    categories
-                        .iter()
-                        .find(|c| c.id == cat_id)
-                        .map(|c| c.is_productive.unwrap_or(false))
-                        .unwrap_or(false)
-                } else {
-                    false
-                }
-            })
-            .map(|a| a.duration_sec)
-            .sum();
+            .map(|c| (c.id, c.clone()))
+            .collect();
 
-        // Aggregate by category
-        let mut category_times: std::collections::HashMap<i64, i64> = std::collections::HashMap::new();
-        for activity in &activities {
-            if !activity.is_idle {
-                if let Some(cat_id) = activity.category_id {
-                    *category_times.entry(cat_id).or_insert(0) += activity.duration_sec;
-                }
-            }
+        let conn = self.conn.lock().unwrap();
+
+        // Query 1: total and productive seconds
+        let (total_seconds, productive_seconds): (i64, i64) = conn.query_row(
+            "SELECT
+                COALESCE(SUM(a.duration_sec), 0),
+                COALESCE(SUM(CASE WHEN c.is_productive = 1 THEN a.duration_sec ELSE 0 END), 0)
+            FROM activities a
+            LEFT JOIN categories c ON a.category_id = c.id
+            WHERE a.started_at >= ?1 AND a.started_at <= ?2 AND a.is_idle = 0",
+            params![start, end],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
+
+        // Query 2: category breakdown
+        let mut category_stats: Vec<CategoryStat> = Vec::new();
+        let mut stmt = conn.prepare(
+            "SELECT a.category_id, SUM(a.duration_sec) AS duration_sec
+             FROM activities a
+             WHERE a.started_at >= ?1 AND a.started_at <= ?2 AND a.is_idle = 0 AND a.category_id IS NOT NULL
+             GROUP BY a.category_id
+             ORDER BY duration_sec DESC",
+        )?;
+        let category_rows = stmt.query_map(params![start, end], |row| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?))
+        })?;
+        for row in category_rows {
+            let (category_id, duration_sec) = row?;
+            let percentage = if total_seconds > 0 {
+                (duration_sec as f64 / total_seconds as f64 * 100.0) as i64
+            } else {
+                0
+            };
+            category_stats.push(CategoryStat {
+                category: cat_map.get(&category_id).cloned(),
+                duration_sec,
+                percentage,
+            });
         }
 
-        let mut category_stats: Vec<CategoryStat> = category_times
-            .into_iter()
-            .map(|(id, seconds)| {
-                let cat = categories.iter().find(|c| c.id == id).cloned();
-                let percentage = if total_seconds > 0 {
-                    (seconds as f64 / total_seconds as f64 * 100.0) as i64
-                } else {
-                    0
-                };
-                CategoryStat {
-                    category: cat,
-                    duration_sec: seconds,
-                    percentage,
-                }
-            })
-            .collect();
-        category_stats.sort_by(|a, b| b.duration_sec.cmp(&a.duration_sec));
-
-        // Aggregate by app
-        let mut app_times: std::collections::HashMap<String, i64> = std::collections::HashMap::new();
-        for activity in &activities {
-            if !activity.is_idle {
-                *app_times.entry(activity.app_name.clone()).or_insert(0) += activity.duration_sec;
-            }
+        // Query 3: app breakdown
+        let mut app_stats: Vec<AppStat> = Vec::new();
+        let mut stmt = conn.prepare(
+            "SELECT a.app_name, SUM(a.duration_sec) AS duration_sec, MAX(a.category_id) AS category_id
+             FROM activities a
+             WHERE a.started_at >= ?1 AND a.started_at <= ?2 AND a.is_idle = 0
+             GROUP BY a.app_name
+             ORDER BY duration_sec DESC",
+        )?;
+        let app_rows = stmt.query_map(params![start, end], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, i64>(1)?,
+                row.get::<_, Option<i64>>(2)?,
+            ))
+        })?;
+        for row in app_rows {
+            let (app_name, duration_sec, category_id) = row?;
+            let category = category_id.and_then(|id| cat_map.get(&id).cloned());
+            app_stats.push(AppStat {
+                app_name,
+                duration_sec,
+                category,
+            });
         }
-
-        let mut app_stats: Vec<AppStat> = app_times
-            .into_iter()
-            .map(|(name, seconds)| {
-                // Find category for this app
-                let category = activities
-                    .iter()
-                    .find(|a| a.app_name == name && !a.is_idle)
-                    .and_then(|a| a.category_id)
-                    .and_then(|cat_id| categories.iter().find(|c| c.id == cat_id).cloned());
-                
-                AppStat {
-                    app_name: name,
-                    duration_sec: seconds,
-                    category,
-                }
-            })
-            .collect();
-        app_stats.sort_by(|a, b| b.duration_sec.cmp(&a.duration_sec));
 
         Ok(DailyStats {
             total_seconds,
@@ -1768,122 +1762,112 @@ impl Database {
         })
     }
 
-    /// Get top apps
+    /// Get top apps (SQL aggregation)
     pub fn get_top_apps(&self, start: i64, end: i64, limit: i64) -> Result<Vec<AppStat>> {
-        let activities = self.get_activities(start, end)?;
         let categories = self.get_categories()?;
-
-        let mut app_times: std::collections::HashMap<String, i64> = std::collections::HashMap::new();
-        for activity in &activities {
-            if !activity.is_idle {
-                *app_times.entry(activity.app_name.clone()).or_insert(0) += activity.duration_sec;
-            }
-        }
-
-        let mut app_stats: Vec<AppStat> = app_times
-            .into_iter()
-            .map(|(name, seconds)| {
-                let category = activities
-                    .iter()
-                    .find(|a| a.app_name == name && !a.is_idle)
-                    .and_then(|a| a.category_id)
-                    .and_then(|cat_id| categories.iter().find(|c| c.id == cat_id).cloned());
-                
-                AppStat {
-                    app_name: name,
-                    duration_sec: seconds,
-                    category,
-                }
-            })
+        let cat_map: std::collections::HashMap<i64, Category> = categories
+            .iter()
+            .map(|c| (c.id, c.clone()))
             .collect();
-        app_stats.sort_by(|a, b| b.duration_sec.cmp(&a.duration_sec));
-        app_stats.truncate(limit as usize);
-
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT a.app_name, SUM(a.duration_sec) AS duration_sec, MAX(a.category_id) AS category_id
+             FROM activities a
+             WHERE a.started_at >= ?1 AND a.started_at <= ?2 AND a.is_idle = 0
+             GROUP BY a.app_name
+             ORDER BY duration_sec DESC
+             LIMIT ?3",
+        )?;
+        let rows = stmt.query_map(params![start, end, limit], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, i64>(1)?,
+                row.get::<_, Option<i64>>(2)?,
+            ))
+        })?;
+        let mut app_stats: Vec<AppStat> = Vec::new();
+        for row in rows {
+            let (app_name, duration_sec, category_id) = row?;
+            let category = category_id.and_then(|id| cat_map.get(&id).cloned());
+            app_stats.push(AppStat {
+                app_name,
+                duration_sec,
+                category,
+            });
+        }
         Ok(app_stats)
     }
 
-    /// Get category usage
+    /// Get category usage (SQL aggregation)
     pub fn get_category_usage(&self, start: i64, end: i64) -> Result<Vec<CategoryUsageStat>> {
-        let activities = self.get_activities(start, end)?;
         let categories = self.get_categories()?;
-
-        let mut category_times: std::collections::HashMap<i64, i64> = std::collections::HashMap::new();
-        for activity in &activities {
-            if !activity.is_idle {
-                if let Some(cat_id) = activity.category_id {
-                    *category_times.entry(cat_id).or_insert(0) += activity.duration_sec;
-                }
+        let cat_map: std::collections::HashMap<i64, Category> = categories
+            .iter()
+            .map(|c| (c.id, c.clone()))
+            .collect();
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT a.category_id, SUM(a.duration_sec) AS duration_sec
+             FROM activities a
+             WHERE a.started_at >= ?1 AND a.started_at <= ?2 AND a.is_idle = 0 AND a.category_id IS NOT NULL
+             GROUP BY a.category_id
+             ORDER BY duration_sec DESC",
+        )?;
+        let rows = stmt.query_map(params![start, end], |row| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?))
+        })?;
+        let mut category_stats: Vec<CategoryUsageStat> = Vec::new();
+        let mut total: i64 = 0;
+        for row in rows {
+            let (category_id, duration_sec) = row?;
+            total += duration_sec;
+            category_stats.push(CategoryUsageStat {
+                category: cat_map.get(&category_id).cloned(),
+                duration_sec,
+                percentage: 0, // set below
+            });
+        }
+        if total > 0 {
+            for stat in &mut category_stats {
+                stat.percentage = (stat.duration_sec as f64 / total as f64 * 100.0) as i64;
             }
         }
-
-        let total: i64 = category_times.values().sum();
-        let mut category_stats: Vec<CategoryUsageStat> = category_times
-            .into_iter()
-            .map(|(id, seconds)| {
-                let category = categories.iter().find(|c| c.id == id).cloned();
-                let percentage = if total > 0 {
-                    (seconds as f64 / total as f64 * 100.0) as i64
-                } else {
-                    0
-                };
-                CategoryUsageStat {
-                    category,
-                    duration_sec: seconds,
-                    percentage,
-                }
-            })
-            .collect();
-        category_stats.sort_by(|a, b| b.duration_sec.cmp(&a.duration_sec));
-
         Ok(category_stats)
     }
 
-    /// Get hourly activity
+    /// Get hourly activity (SQL aggregation)
     pub fn get_hourly_activity(&self, date: i64) -> Result<Vec<HourlyStat>> {
         let start = date;
         let end = date + 86400;
-
-        let activities = self.get_activities(start, end)?;
-        let mut hourly: std::collections::HashMap<i64, i64> = std::collections::HashMap::new();
-
-        for activity in &activities {
-            if !activity.is_idle {
-                let hour = (activity.started_at - start) / 3600;
-                *hourly.entry(hour).or_insert(0) += activity.duration_sec;
-            }
-        }
-
-        let mut stats: Vec<HourlyStat> = hourly
-            .into_iter()
-            .map(|(hour, duration_sec)| HourlyStat { hour, duration_sec })
-            .collect();
-        stats.sort_by(|a, b| a.hour.cmp(&b.hour));
-
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT CAST((started_at - ?1) / 3600 AS INTEGER) AS hour, SUM(duration_sec) AS duration_sec
+             FROM activities
+             WHERE started_at >= ?1 AND started_at <= ?2 AND is_idle = 0
+             GROUP BY CAST((started_at - ?1) / 3600 AS INTEGER)
+             ORDER BY hour ASC",
+        )?;
+        let rows = stmt.query_map(params![start, end], |row| {
+            Ok(HourlyStat {
+                hour: row.get(0)?,
+                duration_sec: row.get(1)?,
+            })
+        })?;
+        let stats: Vec<HourlyStat> = rows.collect::<Result<Vec<_>>>()?;
         Ok(stats)
     }
 
-    /// Get productive time
+    /// Get productive time (SQL aggregation)
     pub fn get_productive_time(&self, start: i64, end: i64) -> Result<i64> {
-        let activities = self.get_activities(start, end)?;
-        let categories = self.get_categories()?;
-
-        let productive_seconds: i64 = activities
-            .iter()
-            .filter(|a| !a.is_idle)
-            .filter(|a| {
-                if let Some(cat_id) = a.category_id {
-                    categories
-                        .iter()
-                        .find(|c| c.id == cat_id)
-                        .map(|c| c.is_productive.unwrap_or(false))
-                        .unwrap_or(false)
-                } else {
-                    false
-                }
-            })
-            .map(|a| a.duration_sec)
-            .sum();
-
+        let conn = self.conn.lock().unwrap();
+        let productive_seconds: i64 = conn.query_row(
+            "SELECT COALESCE(SUM(a.duration_sec), 0) AS productive_seconds
+             FROM activities a
+             INNER JOIN categories c ON a.category_id = c.id
+             WHERE a.started_at >= ?1 AND a.started_at <= ?2 AND a.is_idle = 0 AND c.is_productive = 1",
+            params![start, end],
+            |row| row.get(0),
+        )?;
         Ok(productive_seconds)
     }
 
@@ -2126,113 +2110,119 @@ impl Database {
     // 3. What happens when both category and project have billable=true but different hourly rates?
     // 4. Should we add a billable field directly to activities table for performance?
 
-    /// Get billable hours for a time range
+    /// Get billable hours for a time range (SQL aggregation)
     pub fn get_billable_hours(&self, start: i64, end: i64) -> Result<i64> {
-        let activities = self.get_activities(start, end)?;
-        let categories = self.get_categories()?;
-        let projects = self.get_projects(true)?;
-
-        let billable_seconds: i64 = activities
-            .iter()
-            .filter(|a| !a.is_idle)
-            .filter(|a| {
-                // Check if activity is billable via category
-                if let Some(cat_id) = a.category_id {
-                    if let Some(cat) = categories.iter().find(|c| c.id == cat_id) {
-                        if cat.is_billable.unwrap_or(false) {
-                            return true;
-                        }
-                    }
-                }
-                // Check if activity is billable via project
-                if let Some(proj_id) = a.project_id {
-                    if let Some(proj) = projects.iter().find(|p| p.id == proj_id) {
-                        if proj.is_billable {
-                            return true;
-                        }
-                    }
-                }
-                false
-            })
-            .map(|a| a.duration_sec)
-            .sum();
-
+        let conn = self.conn.lock().unwrap();
+        let billable_seconds: i64 = conn.query_row(
+            "SELECT COALESCE(SUM(a.duration_sec), 0) AS billable_seconds
+             FROM activities a
+             LEFT JOIN categories c ON a.category_id = c.id
+             LEFT JOIN projects p ON a.project_id = p.id
+             WHERE a.started_at >= ?1 AND a.started_at <= ?2 AND a.is_idle = 0
+               AND (c.is_billable = 1 OR p.is_billable = 1)",
+            params![start, end],
+            |row| row.get(0),
+        )?;
         Ok(billable_seconds)
     }
 
-    /// Get billable revenue for a time range
-    /// 
-    /// TODO: This method uses project rate precedence over category rate.
-    /// Consider if this is the desired behavior or if we need more flexible logic.
-    /// See TODO in get_billable_hours for more discussion.
+    /// Get billable revenue for a time range (SQL aggregation).
+    /// Project rate takes precedence over category rate.
     pub fn get_billable_revenue(&self, start: i64, end: i64) -> Result<f64> {
-        let activities = self.get_activities(start, end)?;
-        let categories = self.get_categories()?;
-        let projects = self.get_projects(true)?;
-
-        let mut total_revenue = 0.0;
-
-        for activity in activities.iter().filter(|a| !a.is_idle) {
-            let mut rate = 0.0;
-            let mut is_billable = false;
-
-            // Check project first (project rate takes precedence)
-            if let Some(proj_id) = activity.project_id {
-                if let Some(proj) = projects.iter().find(|p| p.id == proj_id) {
-                    if proj.is_billable && proj.hourly_rate > 0.0 {
-                        rate = proj.hourly_rate;
-                        is_billable = true;
-                    }
-                }
-            }
-
-            // Fall back to category rate if no project rate
-            if !is_billable {
-                if let Some(cat_id) = activity.category_id {
-                    if let Some(cat) = categories.iter().find(|c| c.id == cat_id) {
-                        if cat.is_billable.unwrap_or(false) && cat.hourly_rate.unwrap_or(0.0) > 0.0 {
-                            rate = cat.hourly_rate.unwrap_or(0.0);
-                            is_billable = true;
-                        }
-                    }
-                }
-            }
-
-            if is_billable && rate > 0.0 {
-                let hours = activity.duration_sec as f64 / 3600.0;
-                total_revenue += hours * rate;
-            }
-        }
-
+        let conn = self.conn.lock().unwrap();
+        let total_revenue: f64 = conn.query_row(
+            "SELECT COALESCE(SUM(
+                CASE
+                    WHEN p.is_billable = 1 AND p.hourly_rate > 0 THEN (a.duration_sec / 3600.0) * p.hourly_rate
+                    WHEN c.is_billable = 1 AND c.hourly_rate > 0 THEN (a.duration_sec / 3600.0) * c.hourly_rate
+                    ELSE 0
+                END
+            ), 0) AS total_revenue
+             FROM activities a
+             LEFT JOIN categories c ON a.category_id = c.id
+             LEFT JOIN projects p ON a.project_id = p.id
+             WHERE a.started_at >= ?1 AND a.started_at <= ?2 AND a.is_idle = 0
+               AND ((p.is_billable = 1 AND p.hourly_rate > 0) OR (c.is_billable = 1 AND c.hourly_rate > 0))",
+            params![start, end],
+            |row| row.get(0),
+        )?;
         Ok(total_revenue)
     }
 
     // ========== DOMAIN METHODS ==========
 
-    /// Get top domains for a time range
+    /// Get top domains for a time range (SQL aggregation)
     pub fn get_top_domains(&self, start: i64, end: i64, limit: i64) -> Result<Vec<DomainStat>> {
-        let activities = self.get_activities(start, end)?;
-        let mut domain_times: std::collections::HashMap<String, i64> = std::collections::HashMap::new();
-
-        for activity in &activities {
-            if !activity.is_idle {
-                if let Some(domain) = &activity.domain {
-                    *domain_times.entry(domain.clone()).or_insert(0) += activity.duration_sec;
-                }
-            }
-        }
-
-        let mut domain_stats: Vec<DomainStat> = domain_times
-            .into_iter()
-            .map(|(domain, duration_sec)| DomainStat {
-                domain,
-                duration_sec,
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT domain, SUM(duration_sec) AS duration_sec
+             FROM activities
+             WHERE started_at >= ?1 AND started_at <= ?2 AND is_idle = 0 AND domain IS NOT NULL
+             GROUP BY domain
+             ORDER BY duration_sec DESC
+             LIMIT ?3",
+        )?;
+        let rows = stmt.query_map(params![start, end, limit], |row| {
+            Ok(DomainStat {
+                domain: row.get(0)?,
+                duration_sec: row.get(1)?,
             })
-            .collect();
-        domain_stats.sort_by(|a, b| b.duration_sec.cmp(&a.duration_sec));
-        domain_stats.truncate(limit as usize);
-
+        })?;
+        let domain_stats: Vec<DomainStat> = rows.collect::<Result<Vec<_>>>()?;
         Ok(domain_stats)
+    }
+
+    /// Get aggregated stats for an arbitrary time range (SQL aggregation, for get_stats command).
+    pub fn get_stats_for_range(&self, start: i64, end: i64) -> Result<RangeStats> {
+        let conn = self.conn.lock().unwrap();
+
+        let (total_seconds, productive_seconds): (i64, i64) = conn.query_row(
+            "SELECT
+                COALESCE(SUM(a.duration_sec), 0),
+                COALESCE(SUM(CASE WHEN c.is_productive = 1 THEN a.duration_sec ELSE 0 END), 0)
+            FROM activities a
+            LEFT JOIN categories c ON a.category_id = c.id
+            WHERE a.started_at >= ?1 AND a.started_at <= ?2 AND a.is_idle = 0",
+            params![start, end],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
+
+        let mut stmt = conn.prepare(
+            "SELECT a.category_id, COALESCE(c.name, 'Unknown'), COALESCE(c.color, '#888'), SUM(a.duration_sec) AS duration_sec
+             FROM activities a
+             LEFT JOIN categories c ON a.category_id = c.id
+             WHERE a.started_at >= ?1 AND a.started_at <= ?2 AND a.is_idle = 0 AND a.category_id IS NOT NULL
+             GROUP BY a.category_id
+             ORDER BY duration_sec DESC",
+        )?;
+        let category_breakdown: Vec<(i64, String, String, i64)> = stmt
+            .query_map(params![start, end], |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                ))
+            })?
+            .collect::<Result<Vec<_>>>()?;
+
+        let mut stmt = conn.prepare(
+            "SELECT a.app_name, SUM(a.duration_sec) AS duration_sec
+             FROM activities a
+             WHERE a.started_at >= ?1 AND a.started_at <= ?2 AND a.is_idle = 0
+             GROUP BY a.app_name
+             ORDER BY duration_sec DESC",
+        )?;
+        let app_breakdown: Vec<(String, i64)> = stmt
+            .query_map(params![start, end], |row| Ok((row.get(0)?, row.get(1)?)))?
+            .collect::<Result<Vec<_>>>()?;
+
+        Ok(RangeStats {
+            total_seconds,
+            productive_seconds,
+            category_breakdown,
+            app_breakdown,
+        })
     }
 
     // ========== FOCUS SESSION METHODS ==========
@@ -2907,6 +2897,17 @@ pub struct CategoryUsageStat {
 pub struct HourlyStat {
     pub hour: i64,
     pub duration_sec: i64,
+}
+
+/// Aggregated stats for an arbitrary time range (used by get_stats command).
+#[derive(Debug, Clone)]
+pub struct RangeStats {
+    pub total_seconds: i64,
+    pub productive_seconds: i64,
+    /// (category_id, category_name, color, seconds)
+    pub category_breakdown: Vec<(i64, String, String, i64)>,
+    /// (app_name, seconds)
+    pub app_breakdown: Vec<(String, i64)>,
 }
 
 // Extension trait for optional query results

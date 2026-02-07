@@ -1,4 +1,4 @@
-export { useActivities, useDailyStats, useTimeline, useUpdateActivityCategory, useDeleteActivity, useTodayTotal } from './useActivities';
+export { useActivities, useDailyStats, useStatsForRange, useTimeline, useUpdateActivityCategory, useDeleteActivity, useTodayTotal } from './useActivities';
 export { useCategories, useCreateCategory, useUpdateCategory, useDeleteCategory, useResetSystemCategory, usePinnedCategories } from './useCategories';
 export { useSettings, useUpdateSettings } from './useSettings';
 export { useRules } from './useRules';

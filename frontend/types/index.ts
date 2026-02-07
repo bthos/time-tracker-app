@@ -114,6 +114,14 @@ export interface AppStats {
   category: Category | null;
 }
 
+/** Response from get_stats (aggregated stats for any date range) */
+export interface StatsResponse {
+  total_seconds: number;
+  productive_seconds: number;
+  category_breakdown: { category_id: number; category_name: string; color: string; seconds: number }[];
+  app_breakdown: { app_name: string; seconds: number }[];
+}
+
 // Timeline types
 export interface TimelineBlock {
   start: number;

@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useDailyStats, useCategories, useTrackerStatus, useActivities, useProjects, useTasks } from '../../hooks';
+import { useDailyStats, useStatsForRange, useCategories, useTrackerStatus, useActivities, useProjects, useTasks } from '../../hooks';
 import { useFocusSessions } from '../../hooks/useFocusSessions';
 import { useStore } from '../../store';
 import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
@@ -18,7 +18,7 @@ import GoalProgressWidget from './GoalProgressWidget';
 import ActiveProjectSelector from './ActiveProjectSelector';
 import LoadingSpinner from '../Common/LoadingSpinner';
 import { ErrorBoundary } from '../Common/ErrorBoundary';
-import type { TimelineBlock } from '../../types';
+import type { TimelineBlock, CategoryStats, AppStats, Category } from '../../types';
 
 export default function Dashboard() {
   // Load data
@@ -87,6 +87,7 @@ export default function Dashboard() {
   const isSingleDay = start.toDateString() === end.toDateString();
   
   const { data: stats, isLoading: statsLoading, error: statsError } = useDailyStats(isSingleDay ? statsDate : undefined);
+  const { data: rangeStats, isLoading: rangeStatsLoading, error: rangeStatsError } = useStatsForRange(dateRange);
   const { data: activities, isLoading: activitiesLoading, error: activitiesError } = useActivities();
 
   // Get projects and tasks for timeline enrichment (must be before early returns)
@@ -96,100 +97,53 @@ export default function Dashboard() {
   // Get focus sessions for pomodoro timeline
   const { sessions: focusSessions } = useFocusSessions(dateRange);
 
-  // Compute stats from activities if we have them, especially for multi-day ranges
-  const computedStats = useMemo(() => {
-    if (!activities || activities.length === 0) {
-      return null;
-    }
-    
-    // Filter out idle activities
-    const activeActivities = activities.filter(a => !a.is_idle);
-    
-    // Calculate total duration
-    const total_duration_sec = activeActivities.reduce((sum, a) => sum + a.duration_sec, 0);
-    
-    // Calculate productive duration
-    const productive_duration_sec = activeActivities.reduce((sum, a) => {
-      if (a.category_id) {
-        const category = categories.find(c => c.id === a.category_id);
-        if (category?.is_productive === true) {
-          return sum + a.duration_sec;
-        }
-      }
-      return sum;
-    }, 0);
-    
-    // Aggregate by category (only include activities with categories)
-    const categoryMap = new Map<number, { duration_sec: number; category: typeof categories[0] }>();
-    activeActivities.forEach(a => {
-      if (a.category_id) {
-        const category = categories.find(c => c.id === a.category_id);
-        if (category) {
-          const existing = categoryMap.get(a.category_id) || { duration_sec: 0, category };
-          existing.duration_sec += a.duration_sec;
-          categoryMap.set(a.category_id, existing);
-        }
-      }
-    });
-    
-    const categoryStats = Array.from(categoryMap.values()).map(data => ({
-      category: data.category,
-      duration_sec: data.duration_sec,
-      percentage: total_duration_sec > 0 ? (data.duration_sec / total_duration_sec) * 100 : 0,
-    }));
-    
-    // Aggregate by app
-    const appMap = new Map<string, { duration_sec: number; category: typeof categories[0] | null }>();
-    activeActivities.forEach(a => {
-      const existing = appMap.get(a.app_name) || { duration_sec: 0, category: a.category_id ? categories.find(c => c.id === a.category_id) || null : null };
-      existing.duration_sec += a.duration_sec;
-      if (!existing.category && a.category_id) {
-        existing.category = categories.find(c => c.id === a.category_id) || null;
-      }
-      appMap.set(a.app_name, existing);
-    });
-    
-    const topApps = Array.from(appMap.entries())
-      .map(([app_name, data]) => ({
-        app_name,
-        duration_sec: data.duration_sec,
-        category: data.category,
-      }))
-      .sort((a, b) => b.duration_sec - a.duration_sec)
-      .slice(0, 10);
-    
-    return {
-      total_duration_sec,
-      productive_duration_sec,
-      categories: categoryStats,
-      top_apps: topApps,
-    };
-  }, [activities, categories]);
-
-  // Use computed stats if available (especially for multi-day ranges), otherwise use API stats
-  // Prefer computed stats from activities as they're more reliable for the selected date range
-  const displayStats = useMemo(() => {
-    // If we have computed stats (from activities), use them
-    if (computedStats) {
-      return computedStats;
-    }
-    
-    // Otherwise, use API stats if available
-    if (stats && typeof stats === 'object' && 'total_duration_sec' in stats) {
-      return stats;
-    }
-    
-    // Default empty stats
-    return {
+  // Build displayStats from API only (single-day: get_daily_stats; multi-day: get_stats)
+  const displayStats = useMemo((): { total_duration_sec: number; productive_duration_sec: number; categories: CategoryStats[]; top_apps: AppStats[] } => {
+    const empty: { total_duration_sec: number; productive_duration_sec: number; categories: CategoryStats[]; top_apps: AppStats[] } = {
       total_duration_sec: 0,
       productive_duration_sec: 0,
       categories: [],
       top_apps: [],
     };
-  }, [computedStats, stats]);
 
+    if (isSingleDay && stats && typeof stats === 'object') {
+      // Backend get_daily_stats returns total_seconds, productive_seconds, category_stats, app_stats
+      const total = (stats as { total_seconds?: number; total_duration_sec?: number }).total_seconds ?? (stats as { total_duration_sec?: number }).total_duration_sec ?? 0;
+      const productive = (stats as { productive_seconds?: number; productive_duration_sec?: number }).productive_seconds ?? (stats as { productive_duration_sec?: number }).productive_duration_sec ?? 0;
+      const catStats = (stats as { category_stats?: CategoryStats[]; categories?: CategoryStats[] }).category_stats ?? (stats as { categories?: CategoryStats[] }).categories ?? [];
+      const appList = (stats as { app_stats?: AppStats[]; top_apps?: AppStats[] }).app_stats ?? (stats as { top_apps?: AppStats[] }).top_apps ?? [];
+      return {
+        total_duration_sec: total,
+        productive_duration_sec: productive,
+        categories: catStats,
+        top_apps: appList,
+      };
+    }
+
+    if (!isSingleDay && rangeStats) {
+      const total = rangeStats.total_seconds;
+      const productive = rangeStats.productive_seconds;
+      const minimalCategory = (id: number, name: string, color: string): Category =>
+        ({ id, name, color, icon: '', is_productive: null, is_billable: null, hourly_rate: null, sort_order: 0 });
+      const categories: CategoryStats[] = rangeStats.category_breakdown.map((row) => ({
+        category: minimalCategory(row.category_id, row.category_name, row.color),
+        duration_sec: row.seconds,
+        percentage: total > 0 ? Math.round((row.seconds / total) * 100) : 0,
+      }));
+      const top_apps: AppStats[] = rangeStats.app_breakdown.map((row) => ({
+        app_name: row.app_name,
+        duration_sec: row.seconds,
+        category: null,
+      }));
+      return { total_duration_sec: total, productive_duration_sec: productive, categories, top_apps };
+    }
+
+    return empty;
+  }, [isSingleDay, stats, rangeStats]);
+
+  const hasStatsData = isSingleDay ? stats : rangeStats;
   // Show warning if one query failed but we can still display partial data
-  const showPartialDataWarning = (statsError && !stats && !computedStats) || (activitiesError && !activities);
+  const showPartialDataWarning = (isSingleDay && statsError && !stats) || (!isSingleDay && rangeStatsError && !rangeStats) || (activitiesError && !activities);
 
   // Calculate uncategorized apps count
   const uncategorizedAppsCount = useMemo(() => {
@@ -254,12 +208,12 @@ export default function Dashboard() {
   }, [activities, categories, projects, allTasks]);
 
 
-  // Show loading only if BOTH are loading AND we don't have any data yet
-  // This prevents infinite loading when one query fails or is stuck
-  const isLoading = (statsLoading || activitiesLoading) && !stats && !activities;
+  // Show loading only if we're loading stats (for current range type) and activities, and have no data yet
+  const statsLoadingForRange = isSingleDay ? statsLoading : rangeStatsLoading;
+  const isLoading = (statsLoadingForRange || activitiesLoading) && !hasStatsData && !activities;
   
-  // Show error only if both fail AND we have no data
-  const hasFatalError = statsError && activitiesError && !stats && !activities;
+  // Show error only if stats and activities both fail AND we have no data
+  const hasFatalError = (isSingleDay ? statsError : rangeStatsError) && activitiesError && !hasStatsData && !activities;
 
   if (isLoading) {
     return (
@@ -269,12 +223,13 @@ export default function Dashboard() {
     );
   }
 
+  const statsOrRangeError = isSingleDay ? statsError : rangeStatsError;
   if (hasFatalError) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
           <p className="text-red-600 dark:text-red-400 font-medium">Failed to load dashboard data</p>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">Stats: {String(statsError)}</p>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">Stats: {String(statsOrRangeError)}</p>
           <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Activities: {String(activitiesError)}</p>
         </div>
       </div>
@@ -287,7 +242,7 @@ export default function Dashboard() {
       {showPartialDataWarning && (
         <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
           <p className="text-sm text-yellow-900 dark:text-yellow-200 font-medium">
-            {statsError && !stats && 'Unable to load statistics. '}
+            {(isSingleDay ? statsError && !stats : rangeStatsError && !rangeStats) && 'Unable to load statistics. '}
             {activitiesError && !activities && 'Unable to load activities. '}
             Showing available data.
           </p>

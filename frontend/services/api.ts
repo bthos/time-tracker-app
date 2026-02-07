@@ -1,4 +1,4 @@
-import { Activity, Category, Rule, ManualEntry, Settings, DailyStats, AppUsage, CategoryUsage, HourlyActivity, DateRange, Project, Task, Goal, GoalProgress, GoalAlert, FocusSession, DomainStat } from '../types';
+import { Activity, Category, Rule, ManualEntry, Settings, DailyStats, AppUsage, CategoryUsage, HourlyActivity, DateRange, Project, Task, Goal, GoalProgress, GoalAlert, FocusSession, DomainStat, StatsResponse } from '../types';
 
 // Tauri invoke wrapper
 const invoke = async <T>(cmd: string, args?: Record<string, unknown>): Promise<T> => {
@@ -240,6 +240,13 @@ export const statsApi = {
   
   getProductiveTime: (range: DateRange): Promise<number> => {
     return invoke('get_productive_time', {
+      start: dateToTimestamp(range.start),
+      end: dateToTimestamp(range.end),
+    });
+  },
+
+  getStats: (range: DateRange): Promise<StatsResponse> => {
+    return invoke('get_stats', {
       start: dateToTimestamp(range.start),
       end: dateToTimestamp(range.end),
     });

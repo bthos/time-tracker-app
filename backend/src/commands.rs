@@ -1,6 +1,6 @@
 //! Tauri commands - IPC handlers for frontend communication
 
-use crate::database::{Activity, Category, Database, ManualEntry, Rule, Project, Task, FocusSession, Goal, GoalProgress, GoalAlert, DomainStat};
+use crate::database::{Activity, Category, Database, ManualEntry, Rule, Project, Task, FocusSession, Goal, GoalProgress, GoalAlert, DomainStat, RangeStats};
 use std::sync::Arc;
 use std::sync::Mutex;
 use tauri::State;
@@ -191,75 +191,34 @@ pub fn set_setting(state: State<'_, AppState>, key: String, value: String) -> Re
     state.db.set_setting(&key, &value).map_err(|e| e.to_string())
 }
 
-/// Get aggregated stats for a time range
+/// Get aggregated stats for a time range (SQL aggregation)
 #[tauri::command]
 pub fn get_stats(
     state: State<'_, AppState>,
     start: i64,
     end: i64,
 ) -> Result<StatsResponse, String> {
-    let activities = state.db.get_activities(start, end).map_err(|e| e.to_string())?;
-    let categories = state.db.get_categories().map_err(|e| e.to_string())?;
+    let RangeStats {
+        total_seconds,
+        productive_seconds,
+        category_breakdown: category_rows,
+        app_breakdown: app_rows,
+    } = state.db.get_stats_for_range(start, end).map_err(|e| e.to_string())?;
 
-    // Calculate total time
-    let total_seconds: i64 = activities.iter().filter(|a| !a.is_idle).map(|a| a.duration_sec).sum();
-
-    // Calculate productive time
-    let productive_seconds: i64 = activities
-        .iter()
-        .filter(|a| !a.is_idle)
-        .filter(|a| {
-            if let Some(cat_id) = a.category_id {
-                categories
-                    .iter()
-                    .find(|c| c.id == cat_id)
-                    .map(|c| c.is_productive.unwrap_or(false))
-                    .unwrap_or(false)
-            } else {
-                false
-            }
-        })
-        .map(|a| a.duration_sec)
-        .sum();
-
-    // Aggregate by category
-    let mut category_times: std::collections::HashMap<i64, i64> = std::collections::HashMap::new();
-    for activity in &activities {
-        if !activity.is_idle {
-            if let Some(cat_id) = activity.category_id {
-                *category_times.entry(cat_id).or_insert(0) += activity.duration_sec;
-            }
-        }
-    }
-
-    let category_breakdown: Vec<CategoryTime> = category_times
+    let category_breakdown: Vec<CategoryTime> = category_rows
         .into_iter()
-        .map(|(id, seconds)| {
-            let cat = categories.iter().find(|c| c.id == id);
-            CategoryTime {
-                category_id: id,
-                category_name: cat.map(|c| c.name.clone()).unwrap_or_else(|| "Unknown".to_string()),
-                color: cat.map(|c| c.color.clone()).unwrap_or_else(|| "#888".to_string()),
-                seconds,
-            }
+        .map(|(category_id, category_name, color, seconds)| CategoryTime {
+            category_id,
+            category_name,
+            color,
+            seconds,
         })
         .collect();
 
-    // Aggregate by app
-    let mut app_times: std::collections::HashMap<String, i64> = std::collections::HashMap::new();
-    for activity in &activities {
-        if !activity.is_idle {
-            *app_times.entry(activity.app_name.clone()).or_insert(0) += activity.duration_sec;
-        }
-    }
-
-    let mut app_breakdown: Vec<AppTime> = app_times
+    let app_breakdown: Vec<AppTime> = app_rows
         .into_iter()
-        .map(|(name, seconds)| AppTime { app_name: name, seconds })
+        .map(|(app_name, seconds)| AppTime { app_name, seconds })
         .collect();
-    
-    // Sort by time descending
-    app_breakdown.sort_by(|a, b| b.seconds.cmp(&a.seconds));
 
     Ok(StatsResponse {
         total_seconds,
