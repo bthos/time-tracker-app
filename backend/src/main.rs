@@ -5,6 +5,7 @@ mod autostart;
 mod commands;
 mod database;
 mod idle;
+mod plugins;
 mod pomodoro;
 mod plugin_system;
 mod tracker;
@@ -13,7 +14,8 @@ mod window;
 
 use commands::AppState;
 use database::Database;
-use plugin_system::{PluginRegistry, ExtensionRegistry};
+use plugin_system::{PluginRegistry, ExtensionRegistry, Plugin};
+use plugins::{ProjectsTasksPlugin, BillingPlugin, PomodoroPlugin, GoalsPlugin};
 use std::sync::{Arc, Mutex};
 use tauri::Manager;
 
@@ -48,6 +50,53 @@ fn install_builtin_plugins(
     Ok(())
 }
 
+/// Load and initialize built-in plugins
+fn load_builtin_plugins(
+    db: &Arc<Database>,
+    plugin_registry: &Arc<PluginRegistry>,
+    extension_registry: &Arc<ExtensionRegistry>,
+) -> Result<(), String> {
+    use plugin_system::api::PluginAPI;
+    
+    // Load Projects/Tasks Plugin
+    if db.is_plugin_installed("projects-tasks-plugin")? {
+        let mut plugin = ProjectsTasksPlugin::new(Arc::clone(db));
+        let api = PluginAPI::new(Arc::clone(db), Arc::clone(extension_registry), "projects-tasks-plugin".to_string());
+        plugin.initialize(&api)?;
+        plugin_registry.register(Box::new(plugin))?;
+        eprintln!("Loaded plugin: projects-tasks-plugin");
+    }
+    
+    // Load Billing Plugin
+    if db.is_plugin_installed("billing-plugin")? {
+        let mut plugin = BillingPlugin::new(Arc::clone(db));
+        let api = PluginAPI::new(Arc::clone(db), Arc::clone(extension_registry), "billing-plugin".to_string());
+        plugin.initialize(&api)?;
+        plugin_registry.register(Box::new(plugin))?;
+        eprintln!("Loaded plugin: billing-plugin");
+    }
+    
+    // Load Pomodoro Plugin
+    if db.is_plugin_installed("pomodoro-plugin")? {
+        let mut plugin = PomodoroPlugin::new(Arc::clone(db));
+        let api = PluginAPI::new(Arc::clone(db), Arc::clone(extension_registry), "pomodoro-plugin".to_string());
+        plugin.initialize(&api)?;
+        plugin_registry.register(Box::new(plugin))?;
+        eprintln!("Loaded plugin: pomodoro-plugin");
+    }
+    
+    // Load Goals Plugin
+    if db.is_plugin_installed("goals-plugin")? {
+        let mut plugin = GoalsPlugin::new(Arc::clone(db));
+        let api = PluginAPI::new(Arc::clone(db), Arc::clone(extension_registry), "goals-plugin".to_string());
+        plugin.initialize(&api)?;
+        plugin_registry.register(Box::new(plugin))?;
+        eprintln!("Loaded plugin: goals-plugin");
+    }
+    
+    Ok(())
+}
+
 fn main() {
     // Get data directory
     let data_dir = dirs::data_dir()
@@ -69,6 +118,11 @@ fn main() {
         eprintln!("Warning: Failed to install built-in plugins: {}", e);
     }
     
+    // Load and initialize built-in plugins
+    if let Err(e) = load_builtin_plugins(&db, &plugin_registry, &extension_registry) {
+        eprintln!("Warning: Failed to load built-in plugins: {}", e);
+    }
+    
     // Apply plugin extensions to database schema
     if let Err(e) = db.apply_plugin_extensions(&extension_registry) {
         eprintln!("Warning: Failed to apply plugin extensions: {}", e);
@@ -81,6 +135,7 @@ fn main() {
         thinking_mode_entry_id: Arc::new(Mutex::new(None)),
         active_project_id: Arc::new(Mutex::new(None)),
         active_task_id: Arc::new(Mutex::new(None)),
+        plugin_registry: Some(Arc::clone(&plugin_registry)),
     };
 
     // Build Tauri application

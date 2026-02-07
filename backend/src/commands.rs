@@ -23,6 +23,7 @@ pub struct AppState {
     pub thinking_mode_entry_id: Arc<Mutex<Option<i64>>>,
     pub active_project_id: Arc<Mutex<Option<i64>>>,
     pub active_task_id: Arc<Mutex<Option<i64>>>,
+    pub plugin_registry: Option<Arc<crate::plugin_system::PluginRegistry>>,
 }
 
 /// Get activities for a time range with optional pagination (lazy loading)
@@ -1245,16 +1246,20 @@ pub fn create_project(
     hourly_rate: f64,
     budget_hours: Option<f64>,
 ) -> Result<Project, String> {
-    let id = state
-        .db
-        .create_project(&name, client_name.as_deref(), &color, is_billable, hourly_rate, budget_hours)
-        .map_err(|e| e.to_string())?;
+    let registry = state.plugin_registry.as_ref()
+        .ok_or_else(|| "Plugin registry not available".to_string())?;
     
-    state
-        .db
-        .get_project_by_id(id)
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| "Failed to retrieve created project".to_string())
+    let params = serde_json::json!({
+        "name": name,
+        "client_name": client_name,
+        "color": color,
+        "is_billable": is_billable,
+        "hourly_rate": hourly_rate,
+        "budget_hours": budget_hours,
+    });
+    
+    let value = registry.invoke_plugin_command("projects-tasks-plugin", "create_project", params)?;
+    serde_json::from_value(value).map_err(|e| format!("Failed to deserialize project: {}", e))
 }
 
 /// Get all projects
@@ -1263,10 +1268,15 @@ pub fn get_projects(
     state: State<'_, AppState>,
     include_archived: bool,
 ) -> Result<Vec<Project>, String> {
-    state
-        .db
-        .get_projects(include_archived)
-        .map_err(|e| e.to_string())
+    let registry = state.plugin_registry.as_ref()
+        .ok_or_else(|| "Plugin registry not available".to_string())?;
+    
+    let params = serde_json::json!({
+        "include_archived": include_archived,
+    });
+    
+    let value = registry.invoke_plugin_command("projects-tasks-plugin", "get_projects", params)?;
+    serde_json::from_value(value).map_err(|e| format!("Failed to deserialize projects: {}", e))
 }
 
 /// Update a project
@@ -1282,22 +1292,33 @@ pub fn update_project(
     budget_hours: Option<f64>,
     is_archived: Option<bool>,
 ) -> Result<Project, String> {
-    state
-        .db
-        .update_project(id, &name, client_name.as_deref(), &color, is_billable, hourly_rate, budget_hours, is_archived)
-        .map_err(|e| e.to_string())?;
+    let registry = state.plugin_registry.as_ref()
+        .ok_or_else(|| "Plugin registry not available".to_string())?;
     
-    state
-        .db
-        .get_project_by_id(id)
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| "Project not found".to_string())
+    let params = serde_json::json!({
+        "id": id,
+        "name": name,
+        "client_name": client_name,
+        "color": color,
+        "is_billable": is_billable,
+        "hourly_rate": hourly_rate,
+        "budget_hours": budget_hours,
+        "is_archived": is_archived,
+    });
+    
+    let value = registry.invoke_plugin_command("projects-tasks-plugin", "update_project", params)?;
+    serde_json::from_value(value).map_err(|e| format!("Failed to deserialize project: {}", e))
 }
 
 /// Delete a project (archive)
 #[tauri::command]
 pub fn delete_project(state: State<'_, AppState>, id: i64) -> Result<(), String> {
-    state.db.delete_project(id).map_err(|e| e.to_string())
+    let registry = state.plugin_registry.as_ref()
+        .ok_or_else(|| "Plugin registry not available".to_string())?;
+    
+    let params = serde_json::json!({ "id": id });
+    registry.invoke_plugin_command("projects-tasks-plugin", "delete_project", params)?;
+    Ok(())
 }
 
 // ========== TASK COMMANDS ==========
@@ -1310,16 +1331,17 @@ pub fn create_task(
     name: String,
     description: Option<String>,
 ) -> Result<Task, String> {
-    let id = state
-        .db
-        .create_task(project_id, &name, description.as_deref())
-        .map_err(|e| e.to_string())?;
+    let registry = state.plugin_registry.as_ref()
+        .ok_or_else(|| "Plugin registry not available".to_string())?;
     
-    state
-        .db
-        .get_task_by_id(id)
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| "Failed to retrieve created task".to_string())
+    let params = serde_json::json!({
+        "project_id": project_id,
+        "name": name,
+        "description": description,
+    });
+    
+    let value = registry.invoke_plugin_command("projects-tasks-plugin", "create_task", params)?;
+    serde_json::from_value(value).map_err(|e| format!("Failed to deserialize task: {}", e))
 }
 
 /// Get tasks
@@ -1329,10 +1351,16 @@ pub fn get_tasks(
     project_id: Option<i64>,
     include_archived: bool,
 ) -> Result<Vec<Task>, String> {
-    state
-        .db
-        .get_tasks(project_id, include_archived)
-        .map_err(|e| e.to_string())
+    let registry = state.plugin_registry.as_ref()
+        .ok_or_else(|| "Plugin registry not available".to_string())?;
+    
+    let params = serde_json::json!({
+        "project_id": project_id,
+        "include_archived": include_archived,
+    });
+    
+    let value = registry.invoke_plugin_command("projects-tasks-plugin", "get_tasks", params)?;
+    serde_json::from_value(value).map_err(|e| format!("Failed to deserialize tasks: {}", e))
 }
 
 /// Update a task
@@ -1359,7 +1387,12 @@ pub fn update_task(
 /// Delete a task (archive)
 #[tauri::command]
 pub fn delete_task(state: State<'_, AppState>, id: i64) -> Result<(), String> {
-    state.db.delete_task(id).map_err(|e| e.to_string())
+    let registry = state.plugin_registry.as_ref()
+        .ok_or_else(|| "Plugin registry not available".to_string())?;
+    
+    let params = serde_json::json!({ "id": id });
+    registry.invoke_plugin_command("projects-tasks-plugin", "delete_task", params)?;
+    Ok(())
 }
 
 // ========== BILLABLE TIME COMMANDS ==========
@@ -1371,10 +1404,16 @@ pub fn get_billable_hours(
     start: i64,
     end: i64,
 ) -> Result<i64, String> {
-    state
-        .db
-        .get_billable_hours(start, end)
-        .map_err(|e| e.to_string())
+    let registry = state.plugin_registry.as_ref()
+        .ok_or_else(|| "Plugin registry not available".to_string())?;
+    
+    let params = serde_json::json!({
+        "start": start,
+        "end": end,
+    });
+    
+    let value = registry.invoke_plugin_command("billing-plugin", "get_billable_hours", params)?;
+    value.as_i64().ok_or_else(|| "Invalid response from plugin".to_string())
 }
 
 /// Get billable revenue for a time range
@@ -1384,10 +1423,16 @@ pub fn get_billable_revenue(
     start: i64,
     end: i64,
 ) -> Result<f64, String> {
-    state
-        .db
-        .get_billable_revenue(start, end)
-        .map_err(|e| e.to_string())
+    let registry = state.plugin_registry.as_ref()
+        .ok_or_else(|| "Plugin registry not available".to_string())?;
+    
+    let params = serde_json::json!({
+        "start": start,
+        "end": end,
+    });
+    
+    let value = registry.invoke_plugin_command("billing-plugin", "get_billable_revenue", params)?;
+    value.as_f64().ok_or_else(|| "Invalid response from plugin".to_string())
 }
 
 // ========== DOMAIN COMMANDS ==========
@@ -1435,10 +1480,17 @@ pub fn stop_pomodoro(
     duration_sec: i64,
     completed: bool,
 ) -> Result<(), String> {
-    state
-        .db
-        .update_focus_session(session_id, duration_sec, completed)
-        .map_err(|e| e.to_string())
+    let registry = state.plugin_registry.as_ref()
+        .ok_or_else(|| "Plugin registry not available".to_string())?;
+    
+    let params = serde_json::json!({
+        "session_id": session_id,
+        "duration_sec": duration_sec,
+        "completed": completed,
+    });
+    
+    registry.invoke_plugin_command("pomodoro-plugin", "stop_pomodoro", params)?;
+    Ok(())
 }
 
 /// Get focus sessions for a time range
@@ -1448,10 +1500,16 @@ pub fn get_focus_sessions(
     start: i64,
     end: i64,
 ) -> Result<Vec<FocusSession>, String> {
-    state
-        .db
-        .get_focus_sessions(start, end)
-        .map_err(|e| e.to_string())
+    let registry = state.plugin_registry.as_ref()
+        .ok_or_else(|| "Plugin registry not available".to_string())?;
+    
+    let params = serde_json::json!({
+        "start": start,
+        "end": end,
+    });
+    
+    let value = registry.invoke_plugin_command("pomodoro-plugin", "get_focus_sessions", params)?;
+    serde_json::from_value(value).map_err(|e| format!("Failed to deserialize sessions: {}", e))
 }
 
 /// Get count of completed work sessions for today
@@ -1459,10 +1517,14 @@ pub fn get_focus_sessions(
 pub fn get_completed_work_sessions_count_today(
     state: State<'_, AppState>
 ) -> Result<i32, String> {
-    state
-        .db
-        .get_completed_work_sessions_count_today()
-        .map_err(|e| e.to_string())
+    let registry = state.plugin_registry.as_ref()
+        .ok_or_else(|| "Plugin registry not available".to_string())?;
+    
+    let params = serde_json::json!({});
+    let value = registry.invoke_plugin_command("pomodoro-plugin", "get_completed_work_sessions_count_today", params)?;
+    value.as_i64()
+        .and_then(|v| i32::try_from(v).ok())
+        .ok_or_else(|| "Invalid response from plugin".to_string())
 }
 
 /// Get active (not ended) pomodoro session
@@ -1470,10 +1532,12 @@ pub fn get_completed_work_sessions_count_today(
 pub fn get_active_pomodoro_session(
     state: State<'_, AppState>
 ) -> Result<Option<FocusSession>, String> {
-    state
-        .db
-        .get_active_focus_session()
-        .map_err(|e| e.to_string())
+    let registry = state.plugin_registry.as_ref()
+        .ok_or_else(|| "Plugin registry not available".to_string())?;
+    
+    let params = serde_json::json!({});
+    let value = registry.invoke_plugin_command("pomodoro-plugin", "get_active_pomodoro_session", params)?;
+    serde_json::from_value(value).map_err(|e| format!("Failed to deserialize session: {}", e))
 }
 
 /// Delete focus session
@@ -1482,7 +1546,12 @@ pub fn delete_focus_session(
     state: State<'_, AppState>,
     id: i64,
 ) -> Result<(), String> {
-    state.db.delete_focus_session(id).map_err(|e| e.to_string())
+    let registry = state.plugin_registry.as_ref()
+        .ok_or_else(|| "Plugin registry not available".to_string())?;
+    
+    let params = serde_json::json!({ "id": id });
+    registry.invoke_plugin_command("pomodoro-plugin", "delete_focus_session", params)?;
+    Ok(())
 }
 
 // ========== ACTIVE PROJECT/TASK COMMANDS ==========
@@ -1537,10 +1606,21 @@ pub fn create_goal(
     end_date: Option<i64>,
     name: Option<String>,
 ) -> Result<i64, String> {
-    state
-        .db
-        .create_goal(&goal_type, target_seconds, category_id, project_id, start_date, end_date, name.as_deref())
-        .map_err(|e| e.to_string())
+    let registry = state.plugin_registry.as_ref()
+        .ok_or_else(|| "Plugin registry not available".to_string())?;
+    
+    let params = serde_json::json!({
+        "goal_type": goal_type,
+        "target_seconds": target_seconds,
+        "category_id": category_id,
+        "project_id": project_id,
+        "start_date": start_date,
+        "end_date": end_date,
+        "name": name,
+    });
+    
+    let value = registry.invoke_plugin_command("goals-plugin", "create_goal", params)?;
+    value.as_i64().ok_or_else(|| "Invalid response from plugin".to_string())
 }
 
 /// Get goals
@@ -1549,10 +1629,15 @@ pub fn get_goals(
     state: State<'_, AppState>,
     active_only: bool,
 ) -> Result<Vec<Goal>, String> {
-    state
-        .db
-        .get_goals(active_only)
-        .map_err(|e| e.to_string())
+    let registry = state.plugin_registry.as_ref()
+        .ok_or_else(|| "Plugin registry not available".to_string())?;
+    
+    let params = serde_json::json!({
+        "active_only": active_only,
+    });
+    
+    let value = registry.invoke_plugin_command("goals-plugin", "get_goals", params)?;
+    serde_json::from_value(value).map_err(|e| format!("Failed to deserialize goals: {}", e))
 }
 
 /// Update a goal
@@ -1578,7 +1663,12 @@ pub fn update_goal(
 /// Delete a goal
 #[tauri::command]
 pub fn delete_goal(state: State<'_, AppState>, id: i64) -> Result<(), String> {
-    state.db.delete_goal(id).map_err(|e| e.to_string())
+    let registry = state.plugin_registry.as_ref()
+        .ok_or_else(|| "Plugin registry not available".to_string())?;
+    
+    let params = serde_json::json!({ "id": id });
+    registry.invoke_plugin_command("goals-plugin", "delete_goal", params)?;
+    Ok(())
 }
 
 /// Get goal progress
@@ -1589,10 +1679,17 @@ pub fn get_goal_progress(
     start: i64,
     end: i64,
 ) -> Result<GoalProgress, String> {
-    state
-        .db
-        .get_goal_progress(goal_id, start, end)
-        .map_err(|e| e.to_string())
+    let registry = state.plugin_registry.as_ref()
+        .ok_or_else(|| "Plugin registry not available".to_string())?;
+    
+    let params = serde_json::json!({
+        "goal_id": goal_id,
+        "start": start,
+        "end": end,
+    });
+    
+    let value = registry.invoke_plugin_command("goals-plugin", "get_goal_progress", params)?;
+    serde_json::from_value(value).map_err(|e| format!("Failed to deserialize progress: {}", e))
 }
 
 /// Check goal alerts
@@ -1600,8 +1697,10 @@ pub fn get_goal_progress(
 pub fn check_goal_alerts(
     state: State<'_, AppState>,
 ) -> Result<Vec<GoalAlert>, String> {
-    state
-        .db
-        .check_goal_alerts()
-        .map_err(|e| e.to_string())
+    let registry = state.plugin_registry.as_ref()
+        .ok_or_else(|| "Plugin registry not available".to_string())?;
+    
+    let params = serde_json::json!({});
+    let value = registry.invoke_plugin_command("goals-plugin", "check_goal_alerts", params)?;
+    serde_json::from_value(value).map_err(|e| format!("Failed to deserialize alerts: {}", e))
 }

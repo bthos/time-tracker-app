@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use crate::database::Database;
+use crate::plugin_system::api::PluginAPI;
 
 /// Plugin metadata
 #[derive(Debug, Clone)]
@@ -20,7 +21,7 @@ pub trait Plugin: Send + Sync {
     fn info(&self) -> &PluginInfo;
     
     /// Initialize the plugin
-    fn initialize(&mut self, api: &crate::plugin_system::api::PluginAPI) -> Result<(), String>;
+    fn initialize(&mut self, api: &PluginAPI) -> Result<(), String>;
     
     /// Invoke a command on the plugin
     fn invoke_command(&self, command: &str, params: serde_json::Value) -> Result<serde_json::Value, String>;

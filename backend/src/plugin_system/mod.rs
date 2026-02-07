@@ -10,6 +10,6 @@ pub mod registry;
 pub mod extensions;
 pub mod api;
 
-pub use registry::PluginRegistry;
+pub use registry::{PluginRegistry, Plugin, PluginInfo};
 pub use extensions::{ExtensionRegistry, Extension, ExtensionType, EntityType, SchemaChange, ModelField};
 pub use api::PluginAPI;
