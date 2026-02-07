@@ -256,6 +256,7 @@ impl Database {
 
         // Insert default categories if not exist
         // Regular categories use AUTOINCREMENT (no id specified)
+        // For fresh installs, these will always be inserted since no categories exist yet
         conn.execute_batch(r#"
             INSERT OR IGNORE INTO categories (name, color, icon, is_productive, sort_order, is_system, is_pinned) VALUES
                 ('Work', '#4CAF50', '💼', TRUE, 1, FALSE, FALSE),
@@ -379,6 +380,8 @@ impl Database {
 
             if !exists {
                 // Insert rule if category exists
+                // For fresh installs, categories are inserted before rules, so this will always succeed
+                // For existing databases, if category doesn't exist, no row is inserted (which is correct)
                 let _ = conn.execute(
                     "INSERT INTO rules (rule_type, pattern, category_id, priority)
                      SELECT ?, ?, id, ?

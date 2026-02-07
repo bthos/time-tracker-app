@@ -202,12 +202,12 @@ function App() {
         await invoke('update_manual_entry', {
           id: editingEntry.id,
           description: entry.description,
-          category_id: entry.categoryId,
+          categoryId: entry.categoryId,
           project: editingEntry.project ?? null,
-          started_at: startedAtSec,
-          ended_at: endedAtSec,
-          project_id: editingEntry.project_id ?? null,
-          task_id: editingEntry.task_id ?? null,
+          startedAt: startedAtSec,
+          endedAt: endedAtSec,
+          projectId: editingEntry.project_id ?? null,
+          taskId: editingEntry.task_id ?? null,
         });
         showSuccess('Manual entry updated');
       } else {
