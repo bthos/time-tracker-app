@@ -15,8 +15,9 @@ export function usePlugins() {
       const result = await invoke<InstalledPlugin[]>('list_installed_plugins');
       setPlugins(result);
     } catch (err) {
-      const errorMessage = handleApiError(err, 'Failed to load plugins');
-      setError(errorMessage);
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      handleApiError(err, 'Failed to load plugins');
+      setError(errorMessage || 'Failed to load plugins');
     } finally {
       setIsLoading(false);
     }

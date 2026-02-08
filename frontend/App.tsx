@@ -282,7 +282,7 @@ function App() {
     <div className="app-container">
       <Layout
         currentView={currentView}
-        onViewChange={setCurrentView}
+        onViewChange={(view) => setCurrentView(view as View)}
         onAddEntry={() => setShowManualEntry(true)}
         isTrackingPaused={isTrackingPaused}
       >

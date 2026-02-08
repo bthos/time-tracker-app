@@ -22,6 +22,7 @@ export default function ManualEntryModal({ editEntry, onClose }: ManualEntryModa
   const { categories } = useStore();
   const { data: pinnedCategories = [] } = usePinnedCategories();
   // Projects and tasks are now handled by plugins
+  const projects: any[] = [];
   const createEntry = useCreateManualEntry();
   const updateEntry = useUpdateManualEntry();
 

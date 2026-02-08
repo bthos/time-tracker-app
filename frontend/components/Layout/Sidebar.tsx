@@ -36,7 +36,8 @@ export default function Sidebar({ currentView, onNavigate, onClose }: SidebarPro
   // Pomodoro functionality is now provided by plugins
   // Use settings from store for immediate updates, fallback to useSettings query
   const storeSettings = useStore((state) => state.settings);
-  const { settings: querySettings } = useSettings();
+  const querySettingsResult = useSettings();
+  const querySettings = querySettingsResult.data;
   const enableMarketplace = storeSettings.enable_marketplace ?? querySettings?.enable_marketplace ?? false;
   const { sidebarItems: pluginSidebarItems } = usePluginFrontend();
   
@@ -110,8 +111,6 @@ export default function Sidebar({ currentView, onNavigate, onClose }: SidebarPro
           }).map((item) => {
             const Icon = item.icon;
             const isActive = currentView === item.id;
-            // Pomodoro timer display is now provided by plugins
-            const isPomodoroItem = false;
 
             return (
               <li key={item.id}>

@@ -1,6 +1,6 @@
 // Plugin Frontend API Types
 
-import type { ComponentType, ReactNode } from 'react';
+import type { ComponentType } from 'react';
 
 export interface PluginRoute {
   path: string;

@@ -10,9 +10,10 @@ interface InstalledPluginsProps {
   enablePlugin: (pluginId: string) => Promise<boolean>;
   disablePlugin: (pluginId: string) => Promise<boolean>;
   uninstallPlugin: (pluginId: string) => Promise<boolean>;
+  onUninstall?: () => void;
 }
 
-export default function InstalledPlugins({ plugins, isLoading, enablePlugin, disablePlugin, uninstallPlugin }: InstalledPluginsProps) {
+export default function InstalledPlugins({ plugins, isLoading, enablePlugin, disablePlugin, uninstallPlugin, onUninstall }: InstalledPluginsProps) {
 
   const handleToggle = async (plugin: InstalledPlugin) => {
     if (plugin.enabled) {

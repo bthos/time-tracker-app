@@ -11,7 +11,7 @@ interface PluginDetailsProps {
   onInstall?: (plugin: RegistryPlugin) => void;
 }
 
-export default function PluginDetails({ plugin, isInstalled, onClose, onInstall }: PluginDetailsProps) {
+export default function PluginDetails({ plugin, isInstalled, isInstalling, onClose, onInstall }: PluginDetailsProps) {
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
@@ -19,7 +19,7 @@ export default function PluginDetails({ plugin, isInstalled, onClose, onInstall 
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
             {plugin.name}
             {plugin.verified && (
-              <CheckCircle2 className="w-5 h-5 text-green-500" title="Verified plugin" />
+              <CheckCircle2 className="w-5 h-5 text-green-500" />
             )}
           </h2>
           <button
@@ -105,7 +105,7 @@ export default function PluginDetails({ plugin, isInstalled, onClose, onInstall 
               rel="noopener noreferrer"
               className="flex-1"
             >
-              <Button variant="outline" className="w-full flex items-center justify-center gap-2">
+              <Button variant="secondary" className="w-full flex items-center justify-center gap-2">
                 <ExternalLink className="w-4 h-4" />
                 View Repository
               </Button>

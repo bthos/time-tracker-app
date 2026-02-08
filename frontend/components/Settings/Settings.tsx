@@ -9,7 +9,7 @@ import { useRules } from '../../hooks/useRules';
 import { useCategories, useCreateCategory, useUpdateCategory, useDeleteCategory, useResetSystemCategory } from '../../hooks/useCategories';
 import { usePluginFrontend } from '../../hooks/usePluginFrontend';
 import { Category } from '../../types';
-import { Check, X, Trash2, Edit2, RotateCcw, Settings as SettingsIcon, Tag, FileText, Info, Folder, CheckSquare, Target } from 'lucide-react';
+import { Check, X, Trash2, Edit2, RotateCcw, Settings as SettingsIcon, Tag, FileText, Info } from 'lucide-react';
 import { ErrorBoundary } from '../Common/ErrorBoundary';
 import type { PluginSettingsTab } from '../../types/pluginFrontend';
 
@@ -41,6 +41,9 @@ const Settings: React.FC<SettingsProps> = () => {
   const [newCategory, setNewCategory] = useState<Partial<Category> | null>(null);
   const [editingCategoryId, setEditingCategoryId] = useState<number | null>(null);
   const [editingCategory, setEditingCategory] = useState<Partial<Category> | null>(null);
+  const [editingProjectId, setEditingProjectId] = useState<number | null>(null);
+  // Projects are now handled by plugins, but we keep this for category editing compatibility
+  const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
   const [newRule, setNewRule] = useState<Partial<Rule>>({
     rule_type: 'app_name',
     pattern: '',
@@ -86,7 +89,12 @@ const Settings: React.FC<SettingsProps> = () => {
 
   // Sync activeTab changes to store
   useEffect(() => {
-    setSettingsActiveTab(activeTab);
+    // Only sync if it's a valid SettingsTab, not a plugin tab
+    if (activeTab === 'general' || activeTab === 'categories' || activeTab === 'rules' || activeTab === 'about') {
+      setSettingsActiveTab(activeTab);
+    } else {
+      setSettingsActiveTab(null);
+    }
   }, [activeTab, setSettingsActiveTab]);
 
   // Handle scroll to idle prompt threshold

@@ -27,7 +27,7 @@ export default function Header({ onAddEntry, onMenuClick }: HeaderProps) {
   const resumeTracking = useResumeTracking();
   
   // Pomodoro status is now provided by plugins
-  const pomodoroStatus = { is_running: false, is_active: false, pomodoro_type: 'work' as const };
+  const pomodoroStatus = useStore((state) => state.pomodoroStatus) || { is_running: false, is_active: false, pomodoro_type: 'work' as const, remaining_sec: 0, total_sec: 0, session_id: null, started_at: null };
   const pausePomodoro = () => {};
   const resumePomodoro = () => {};
 

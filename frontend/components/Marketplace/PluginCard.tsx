@@ -23,7 +23,7 @@ export default function PluginCard({ plugin, isInstalled, isInstalling = false, 
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
               {plugin.name}
               {plugin.verified && (
-                <CheckCircle2 className="w-4 h-4 text-green-500" title="Verified plugin" />
+                <CheckCircle2 className="w-4 h-4 text-green-500" />
               )}
             </h3>
             <p className="text-sm text-gray-500 dark:text-gray-400">by {plugin.author}</p>
@@ -71,7 +71,7 @@ export default function PluginCard({ plugin, isInstalled, isInstalling = false, 
       <div className="flex gap-2">
         {onViewDetails && (
           <Button
-            variant="outline"
+            variant="secondary"
             onClick={() => onViewDetails(plugin)}
             className="flex-1"
           >

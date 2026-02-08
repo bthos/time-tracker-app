@@ -8,7 +8,6 @@ import { useActivities, useManualEntries, useDeleteActivity, useDeleteManualEntr
 import { useTrackerStatus } from '../../hooks/useTracker';
 import { SkeletonLoader } from '../Common/SkeletonLoader';
 import { Edit2, Trash2, Inbox, Calendar, Briefcase, Coffee, CheckCircle2, XCircle, Clock, Play, Filter, Tag } from 'lucide-react';
-import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 
 interface HistoryProps {
   activities?: Activity[];
@@ -56,42 +55,6 @@ const History: React.FC<HistoryProps> = ({
   const deleteActivityMutation = useDeleteActivity();
   const deleteManualEntryMutation = useDeleteManualEntry();
   const deleteFocusSessionMutation = useDeleteFocusSession();
-  
-  // Get date range from store for focus sessions
-  const dateRangePreset = useStore((state) => state.dateRangePreset);
-  const customStartTimestamp = useStore((state) => 
-    state.dateRangePreset === 'custom' 
-      ? (state.selectedDateRange.start instanceof Date 
-          ? state.selectedDateRange.start.getTime() 
-          : new Date(state.selectedDateRange.start).getTime())
-      : null
-  );
-  const customEndTimestamp = useStore((state) => 
-    state.dateRangePreset === 'custom'
-      ? (state.selectedDateRange.end instanceof Date 
-          ? state.selectedDateRange.end.getTime() 
-          : new Date(state.selectedDateRange.end).getTime())
-      : null
-  );
-  
-  const dateRange = useMemo(() => {
-    const now = new Date();
-    switch (dateRangePreset) {
-      case 'today':
-        return { start: startOfDay(now), end: endOfDay(now) };
-      case 'week':
-        return { start: startOfWeek(now, { weekStartsOn: 1 }), end: endOfWeek(now, { weekStartsOn: 1 }) };
-      case 'month':
-        return { start: startOfMonth(now), end: endOfMonth(now) };
-      case 'custom':
-        return {
-          start: customStartTimestamp !== null ? new Date(customStartTimestamp) : startOfDay(now),
-          end: customEndTimestamp !== null ? new Date(customEndTimestamp) : endOfDay(now),
-        };
-      default:
-        return { start: startOfDay(now), end: endOfDay(now) };
-    }
-  }, [dateRangePreset, customStartTimestamp, customEndTimestamp]);
   
   // Focus Sessions, Projects, and Tasks are now provided by plugins
   const focusSessions: FocusSession[] = [];

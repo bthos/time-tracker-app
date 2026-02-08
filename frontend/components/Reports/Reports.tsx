@@ -6,7 +6,6 @@ import { useCategories } from '../../hooks/useCategories';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from 'recharts';
 import { formatDuration } from '../../utils/format';
 import { exportData } from '../../utils/export';
-import { presetToDateRange } from '../../store';
 import { api } from '../../services/api';
 import LoadingSpinner from '../Common/LoadingSpinner';
 import { Filter, X, DollarSign } from 'lucide-react';

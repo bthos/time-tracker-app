@@ -15,8 +15,9 @@ export function usePluginRegistry() {
       const result = await invoke<RegistryPlugin[]>('get_plugin_registry');
       setPlugins(result);
     } catch (err) {
-      const errorMessage = handleApiError(err, 'Failed to load plugin registry');
-      setError(errorMessage);
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      handleApiError(err, 'Failed to load plugin registry');
+      setError(errorMessage || 'Failed to load plugin registry');
     } finally {
       setIsLoading(false);
     }
@@ -38,8 +39,9 @@ export function usePluginRegistry() {
         await fetchRegistry();
       }
     } catch (err) {
-      const errorMessage = handleApiError(err, 'Failed to search plugins');
-      setError(errorMessage);
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      handleApiError(err, 'Failed to search plugins');
+      setError(errorMessage || 'Failed to search plugins');
     } finally {
       setIsLoading(false);
     }
