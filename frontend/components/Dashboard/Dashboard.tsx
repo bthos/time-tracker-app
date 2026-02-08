@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useDailyStats, useStatsForRange, useCategories, useTrackerStatus, useActivities, useProjects, useTasks } from '../../hooks';
 import { useFocusSessions } from '../../hooks/useFocusSessions';
 import { useStore } from '../../store';
+import { usePluginFrontend } from '../../hooks/usePluginFrontend';
 import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 import StatsOverview from './StatsOverview';
 import CategoryChart from './CategoryChart';
@@ -19,11 +20,13 @@ import ActiveProjectSelector from './ActiveProjectSelector';
 import LoadingSpinner from '../Common/LoadingSpinner';
 import { ErrorBoundary } from '../Common/ErrorBoundary';
 import type { TimelineBlock, CategoryStats, AppStats, Category } from '../../types';
+import type { PluginDashboardWidget } from '../../types/pluginFrontend';
 
 export default function Dashboard() {
   // Load data
   useCategories();
   useTrackerStatus();
+  const { dashboardWidgets: pluginWidgets } = usePluginFrontend();
   
   // Get date range and categories from store to ensure consistency with activities
   // Use selector to prevent re-renders from function reference changes
@@ -290,6 +293,23 @@ export default function Dashboard() {
           <GoalProgressWidget />
         </ErrorBoundary>
       </div>
+
+      {/* Plugin Dashboard Widgets */}
+      {pluginWidgets.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
+          {pluginWidgets.map((widget: PluginDashboardWidget) => {
+            const WidgetComponent = widget.component;
+            const colSpan = widget.gridColSpan || 1;
+            return (
+              <ErrorBoundary key={widget.id}>
+                <div className={colSpan === 2 ? 'lg:col-span-2' : colSpan === 3 ? 'lg:col-span-3' : ''}>
+                  <WidgetComponent />
+                </div>
+              </ErrorBoundary>
+            );
+          })}
+        </div>
+      )}
 
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

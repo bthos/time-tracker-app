@@ -3,8 +3,8 @@ import Sidebar from './Sidebar';
 import Header from './Header';
 
 interface LayoutProps {
-  currentView: 'dashboard' | 'history' | 'reports' | 'settings' | 'pomodoro';
-  onViewChange: (view: 'dashboard' | 'history' | 'reports' | 'settings' | 'pomodoro') => void;
+  currentView: string;
+  onViewChange: (view: string) => void;
   onAddEntry: () => void;
   isTrackingPaused: boolean;
   children: React.ReactNode;
@@ -25,7 +25,7 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onViewChange, onAddEntry, 
   }, []);
 
   // Close sidebar when navigating on mobile
-  const handleViewChange = (view: typeof currentView) => {
+  const handleViewChange = (view: string) => {
     onViewChange(view);
     if (window.innerWidth < 1024) {
       setSidebarOpen(false);

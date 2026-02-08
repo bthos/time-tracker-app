@@ -9,21 +9,25 @@ import { useRules } from '../../hooks/useRules';
 import { useCategories, useCreateCategory, useUpdateCategory, useDeleteCategory, useResetSystemCategory } from '../../hooks/useCategories';
 import { useProjects } from '../../hooks/useProjects';
 import { useTasks } from '../../hooks/useTasks';
+import { usePluginFrontend } from '../../hooks/usePluginFrontend';
 import { Category } from '../../types';
 import { Check, X, Trash2, Edit2, RotateCcw, Settings as SettingsIcon, Tag, FileText, Info, Folder, CheckSquare, Target } from 'lucide-react';
 import { Projects } from '../Projects';
 import { Tasks } from '../Tasks';
 import { Goals } from '../Goals';
+import { ErrorBoundary } from '../Common/ErrorBoundary';
+import type { PluginSettingsTab } from '../../types/pluginFrontend';
 
 interface SettingsProps {
   onClose?: () => void;
 }
 
-type SettingsTab = 'general' | 'categories' | 'rules' | 'projects' | 'tasks' | 'goals' | 'about';
+type SettingsTab = 'general' | 'categories' | 'rules' | 'projects' | 'tasks' | 'goals' | 'about' | string;
 
 const Settings: React.FC<SettingsProps> = () => {
   const { settings, setSettings, categories, pendingRuleData, settingsActiveTab, scrollToIdlePromptThreshold, setPendingRuleData, setSettingsActiveTab, setScrollToIdlePromptThreshold } = useStore();
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
+  const { settingsTabs: pluginTabs } = usePluginFrontend();
   const [localSettings, setLocalSettings] = useState<SettingsType>(settings);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -1742,6 +1746,20 @@ const Settings: React.FC<SettingsProps> = () => {
           </div>
         )}
         {activeTab === 'about' && renderAbout()}
+        {/* Plugin settings tabs */}
+        {pluginTabs.map((tab: PluginSettingsTab) => {
+          if (activeTab === tab.id) {
+            const TabComponent = tab.component;
+            return (
+              <ErrorBoundary key={tab.id}>
+                <div className="-m-4 sm:-m-6">
+                  <TabComponent />
+                </div>
+              </ErrorBoundary>
+            );
+          }
+          return null;
+        })}
       </div>
     </div>
   );

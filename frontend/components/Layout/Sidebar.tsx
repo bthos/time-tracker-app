@@ -13,14 +13,15 @@ import { useTodayTotal } from '../../hooks';
 import { usePomodoro } from '../../hooks/usePomodoro';
 import { formatTimerTime } from '../../utils/format';
 import { useSettings } from '../../hooks/useSettings';
+import { usePluginFrontend } from '../../hooks/usePluginFrontend';
 
 interface SidebarProps {
   currentView: string;
-  onNavigate: (view: 'dashboard' | 'history' | 'reports' | 'settings' | 'pomodoro' | 'marketplace') => void;
+  onNavigate: (view: string) => void;
   onClose?: () => void;
 }
 
-const navItems = [
+const coreNavItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'history', label: 'History', icon: History },
   { id: 'reports', label: 'Reports', icon: FileText },
@@ -38,6 +39,21 @@ export default function Sidebar({ currentView, onNavigate, onClose }: SidebarPro
   const storeSettings = useStore((state) => state.settings);
   const { settings: querySettings } = useSettings();
   const enableMarketplace = storeSettings.enable_marketplace ?? querySettings?.enable_marketplace ?? false;
+  const { sidebarItems: pluginSidebarItems } = usePluginFrontend();
+  
+  // Combine core nav items with plugin sidebar items
+  const navItems = [
+    ...coreNavItems.map(item => ({
+      ...item,
+      order: item.id === 'dashboard' ? 0 : item.id === 'history' ? 1 : item.id === 'reports' ? 2 : item.id === 'pomodoro' ? 3 : item.id === 'marketplace' ? 4 : 5,
+    })),
+    ...pluginSidebarItems.map(item => ({
+      id: item.route,
+      label: item.label,
+      icon: item.icon,
+      order: item.order ?? 100,
+    })),
+  ].sort((a, b) => (a.order || 0) - (b.order || 0));
 
   return (
     <aside className="w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col h-full">

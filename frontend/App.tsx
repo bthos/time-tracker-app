@@ -3,6 +3,7 @@ import { useStore, type View } from './store';
 import { useSettings } from './hooks/useSettings';
 import { useActivities } from './hooks/useActivities';
 import { useCategories } from './hooks/useCategories';
+import { usePluginFrontend } from './hooks/usePluginFrontend';
 import Layout from './components/Layout/Layout';
 import Dashboard from './components/Dashboard/Dashboard';
 import History from './components/History/History';
@@ -14,6 +15,7 @@ import IdlePrompt from './components/IdlePrompt/IdlePrompt';
 import ManualEntryModal from './components/ManualEntry/ManualEntryModal';
 import { listen } from '@tauri-apps/api/event';
 import type { ManualEntry } from './types';
+import type { PluginRoute } from './types/pluginFrontend';
 
 const VALID_VIEWS: View[] = ['dashboard', 'history', 'reports', 'settings', 'pomodoro', 'marketplace'];
 
@@ -242,6 +244,14 @@ function App() {
   }
 
   const renderView = () => {
+    // Check for plugin routes first
+    const pluginRoute = pluginRoutes.find((route: PluginRoute) => route.path === currentView);
+    if (pluginRoute) {
+      const Component = pluginRoute.component;
+      return <Component />;
+    }
+    
+    // Core routes
     switch (currentView) {
       case 'dashboard':
         return <Dashboard />;

@@ -53,6 +53,8 @@ export interface InstalledPlugin {
   manifest_path?: string;
   is_builtin: boolean;
   enabled: boolean;
+  frontend_entry?: string;
+  frontend_components?: string[];
 }
 
 export interface PluginRegistry {
