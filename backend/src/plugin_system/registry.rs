@@ -3,11 +3,9 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use crate::database::Database;
-use crate::plugin_system::api::PluginAPI;
-use time_tracker_plugin_sdk::Plugin;
 
 // Re-export SDK types for convenience
-pub use time_tracker_plugin_sdk::{Plugin as PluginTrait, PluginInfo};
+pub use time_tracker_plugin_sdk::Plugin as PluginTrait;
 
 /// Registry for managing all loaded plugins
 pub struct PluginRegistry {
@@ -38,8 +36,8 @@ impl PluginRegistry {
     }
     
     /// Get a plugin by ID
-    pub fn get(&self, plugin_id: &str) -> Option<Arc<dyn PluginTrait>> {
-        let plugins = self.plugins.lock().ok()?;
+    pub fn get(&self, _plugin_id: &str) -> Option<Arc<dyn PluginTrait>> {
+        let _plugins = self.plugins.lock().ok()?;
         // Note: We can't return a reference to a trait object from a Mutex
         // This is a limitation - plugins will need to be accessed differently
         // For now, we'll use invoke_command pattern

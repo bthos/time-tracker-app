@@ -31,5 +31,25 @@ export default defineConfig({
       // tell vite to ignore watching `backend`
       ignored: ["**/backend/**"],
     },
+    // Disable warmup - it can cause blocking issues
+  },
+  optimizeDeps: {
+    // Pre-bundle dependencies for faster startup
+    include: [
+      'react',
+      'react-dom',
+      'react-dom/client',
+      '@tanstack/react-query',
+      'react/jsx-runtime',
+      'react/jsx-dev-runtime',
+    ],
+    // Exclude large dependencies that don't need pre-bundling
+    exclude: [],
+    // Optimize entry points - this helps Vite discover dependencies early
+    entries: ['./frontend/main.tsx'],
+    // Use esbuild for faster pre-bundling
+    esbuildOptions: {
+      target: 'es2022',
+    },
   },
 });

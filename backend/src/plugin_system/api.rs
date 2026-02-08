@@ -190,8 +190,8 @@ impl PluginAPIInterface for PluginAPI {
     
     fn register_query_filters(
         &self,
-        entity_type: SDKEntityType,
-        query_filters: Vec<SDKQueryFilter>,
+        _entity_type: SDKEntityType,
+        _query_filters: Vec<SDKQueryFilter>,
     ) -> Result<(), String> {
         // SDK QueryFilter uses serde_json::Value, backend QueryFilter uses Activity
         // This conversion will need to be handled differently - for now, return error

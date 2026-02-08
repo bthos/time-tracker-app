@@ -3,10 +3,9 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use crate::database::{Database, Activity};
-use time_tracker_plugin_sdk::QueryFilter as SDKQueryFilter;
 
 // Re-export SDK types for convenience
-pub use time_tracker_plugin_sdk::{EntityType, ExtensionType, SchemaChange, ModelField, ForeignKey};
+pub use time_tracker_plugin_sdk::{EntityType, ExtensionType, SchemaChange, ModelField};
 
 /// Activity hook for data processing (backend-specific)
 pub struct ActivityHook {
@@ -56,7 +55,7 @@ impl ExtensionRegistry {
     }
     
     /// Get extensions for an entity type (returns references)
-    pub fn get_extensions(&self, entity_type: EntityType) -> Vec<Extension> {
+    pub fn get_extensions(&self, _entity_type: EntityType) -> Vec<Extension> {
         // Since Extension contains non-Clone types, we need to return owned values
         // In practice, extensions will be registered once and accessed by reference
         // For now, we'll return empty vec - this will be implemented when we actually use extensions
@@ -152,7 +151,7 @@ impl ExtensionRegistry {
     }
     
     /// Get extensions by reference (for accessing hooks and filters)
-    pub fn get_extensions_ref(&self, entity_type: EntityType) -> Vec<&Extension> {
+    pub fn get_extensions_ref(&self, _entity_type: EntityType) -> Vec<&Extension> {
         // This won't work with current Mutex design - we'll need to refactor
         // For now, return empty - will be implemented when needed
         vec![]

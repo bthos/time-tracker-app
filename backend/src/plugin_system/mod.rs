@@ -14,11 +14,7 @@ pub mod api;
 pub mod discovery;
 pub mod loader;
 
-pub use registry::{PluginRegistry, PluginTrait as Plugin, PluginInfo};
-pub use extensions::{ExtensionRegistry, Extension, ExtensionType, EntityType, SchemaChange, ModelField};
-pub use api::PluginAPI;
-pub use discovery::{PluginDiscovery, RegistryPlugin, PluginManifest};
+pub use registry::PluginRegistry;
+pub use extensions::ExtensionRegistry;
+pub use discovery::PluginDiscovery;
 pub use loader::PluginLoader;
-
-// Re-export SDK types for convenience
-pub use time_tracker_plugin_sdk::{Plugin as PluginTrait, PluginInfo as SDKPluginInfo};

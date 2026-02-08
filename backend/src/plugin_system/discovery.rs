@@ -1,7 +1,6 @@
 //! Plugin Discovery - discover plugins from registry and GitHub
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 /// Registry plugin entry
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -39,8 +38,6 @@ pub struct PluginManifest {
     pub backend: Option<BackendSection>,
     #[serde(rename = "frontend")]
     pub frontend: Option<FrontendSection>,
-    #[serde(rename = "build")]
-    pub build: Option<BuildSection>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -64,23 +61,14 @@ pub struct PluginManifestSection {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BackendSection {
-    #[serde(rename = "crate_name")]
-    pub crate_name: String,
     #[serde(rename = "library_name")]
     pub library_name: String,
-    #[serde(rename = "entry_point")]
-    pub entry_point: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FrontendSection {
     pub entry: Option<String>,
     pub components: Option<Vec<String>>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BuildSection {
-    pub targets: Vec<String>,
 }
 
 /// GitHub Release asset

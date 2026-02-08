@@ -29,10 +29,59 @@ function App() {
   const { isLoading: settingsLoading } = useSettings();
   const { isLoading: activitiesLoading, refetch: refetchActivities } = useActivities();
   const { isLoading: categoriesLoading } = useCategories();
-  const { routes: pluginRoutes } = usePluginFrontend();
+  const { routes: pluginRoutes, isLoading: pluginsLoading } = usePluginFrontend();
 
   const isTrackingPaused = useStore((state) => state.isTrackingPaused);
   const darkMode = useStore((state) => state.settings.darkMode);
+
+  // Compute loading state
+  const isLoading = settingsLoading || activitiesLoading || categoriesLoading || pluginsLoading;
+
+  // Track which phase we're in to show more specific status
+  const [loadingPhase, setLoadingPhase] = useState<string>('');
+
+  // Update splash screen status during loading
+  useEffect(() => {
+    const updateSplashStatus = (window as any).updateSplashStatus;
+    if (!updateSplashStatus) return;
+
+    // Show detailed status for each loading phase
+    // Priority: settings first (needed for other things), then plugins, then categories, then activities
+    if (settingsLoading && loadingPhase !== 'settings') {
+      setLoadingPhase('settings');
+      updateSplashStatus('Loading application settings...');
+    } else if (!settingsLoading && pluginsLoading && loadingPhase !== 'plugins') {
+      setLoadingPhase('plugins');
+      updateSplashStatus('Initializing plugins...');
+    } else if (!settingsLoading && !pluginsLoading && categoriesLoading && loadingPhase !== 'categories') {
+      setLoadingPhase('categories');
+      updateSplashStatus('Loading activity categories...');
+    } else if (!settingsLoading && !pluginsLoading && !categoriesLoading && activitiesLoading && loadingPhase !== 'activities') {
+      setLoadingPhase('activities');
+      updateSplashStatus('Loading time tracking data...');
+    } else if (!isLoading && loadingPhase !== 'done') {
+      setLoadingPhase('done');
+      // All data loaded - hide splash screen immediately
+      updateSplashStatus('Finalizing setup...');
+      const hideSplashScreen = (window as any).hideSplashScreen;
+      if (hideSplashScreen) {
+        // Use requestAnimationFrame for smooth transition without blocking
+        requestAnimationFrame(() => {
+          hideSplashScreen();
+        });
+      }
+    }
+  }, [settingsLoading, categoriesLoading, activitiesLoading, pluginsLoading, isLoading, loadingPhase]);
+
+  // Show status when component first mounts
+  useEffect(() => {
+    const updateSplashStatus = (window as any).updateSplashStatus;
+    if (updateSplashStatus) {
+      updateSplashStatus('Loading components...');
+      // Immediately move to database connection without delay
+      updateSplashStatus('Connecting to database...');
+    }
+  }, []);
 
   // Apply dark mode theme on mount and when it changes
   useEffect(() => {
@@ -230,18 +279,8 @@ function App() {
     }
   };
 
-  const isLoading = settingsLoading || activitiesLoading || categoriesLoading;
-
-  if (isLoading) {
-    return (
-      <div className="h-screen w-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-primary-200 dark:border-primary-800 border-t-primary-600 dark:border-t-primary-400 rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-700 dark:text-gray-300 font-medium">Loading TimeTracker...</p>
-        </div>
-      </div>
-    );
-  }
+  // Note: Loading screen is now handled by splash screen, so we don't show a separate loading screen here
+  // The splash screen will be hidden once all data is loaded (see useEffect above)
 
   const renderView = () => {
     // Check for plugin routes first

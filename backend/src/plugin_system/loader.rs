@@ -158,14 +158,8 @@ impl PluginLoader {
 
         // Check backend section if present
         if let Some(backend) = &manifest.backend {
-            if backend.crate_name.is_empty() {
-                return Err("Backend crate_name is required".to_string());
-            }
             if backend.library_name.is_empty() {
                 return Err("Backend library_name is required".to_string());
-            }
-            if backend.entry_point.is_empty() {
-                return Err("Backend entry_point is required".to_string());
             }
         }
 
@@ -257,7 +251,7 @@ impl PluginLoader {
         plugin_id: &str,
     ) -> Result<Box<dyn time_tracker_plugin_sdk::Plugin>, String> {
         use libloading::{Library, Symbol};
-        use time_tracker_plugin_sdk::{PluginCreateFn, Plugin};
+        use time_tracker_plugin_sdk::PluginCreateFn;
         
         let plugin_dir = self.get_plugin_dir(plugin_id);
         
@@ -322,7 +316,8 @@ impl PluginLoader {
             }
             
             // Convert raw pointer to Box<dyn Plugin>
-            let plugin = unsafe { Box::from_raw(plugin_ptr) };
+            // Note: Box::from_raw is safe here because we're already in an unsafe block
+            let plugin = Box::from_raw(plugin_ptr);
             
             Ok(plugin)
         }

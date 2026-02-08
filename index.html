@@ -4,10 +4,353 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#2563eb" />
     <title>TimeTracker</title>
+    <style>
+      /* Immediate background to prevent white/black flash */
+      html {
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 50%, #1e40af 100%) !important;
+        overflow: hidden;
+      }
+      
+      body {
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 50%, #1e40af 100%) !important;
+        overflow: hidden;
+        /* Force background to render immediately */
+        background-color: #2563eb !important;
+        background-image: linear-gradient(135deg, #2563eb 0%, #1d4ed8 50%, #1e40af 100%) !important;
+      }
+
+      /* Splash screen styles */
+      #splash-screen {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 50%, #1e40af 100%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+        transition: opacity 0.5s ease-out, visibility 0.5s ease-out;
+        overflow: hidden;
+      }
+
+      #splash-screen::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        left: -50%;
+        width: 200%;
+        height: 200%;
+        background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
+        animation: pulse-glow 3s ease-in-out infinite;
+      }
+
+      #splash-screen.hidden {
+        opacity: 0;
+        visibility: hidden;
+      }
+
+      .splash-content {
+        text-align: center;
+        color: white;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        letter-spacing: -0.01em;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        position: relative;
+        z-index: 1;
+      }
+
+      .splash-logo-wrapper {
+        margin-bottom: 24px;
+        animation: fadeInScale 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        opacity: 1;
+      }
+
+      .splash-logo {
+        font-size: 64px;
+        font-weight: 600;
+        margin-bottom: 0;
+        display: inline-block;
+        filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.2));
+        animation: float 3s ease-in-out infinite;
+      }
+
+      .splash-title {
+        font-size: 32px;
+        font-weight: 600;
+        margin-bottom: 8px;
+        opacity: 1;
+        animation: fadeInUp 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) 0.2s forwards;
+        letter-spacing: -0.02em;
+        filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.15));
+      }
+
+      .splash-subtitle {
+        font-size: 16px;
+        font-weight: 400;
+        margin-bottom: 32px;
+        opacity: 1;
+        animation: fadeInUp 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) 0.4s forwards;
+        color: rgba(255, 255, 255, 0.85);
+        letter-spacing: 0.01em;
+      }
+
+      .splash-status {
+        font-size: 14px;
+        font-weight: 400;
+        margin-bottom: 32px;
+        height: 20px;
+        line-height: 20px;
+        opacity: 1;
+        animation: fadeInUp 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) 0.6s forwards;
+        color: rgba(255, 255, 255, 0.9);
+        letter-spacing: 0.01em;
+        transition: opacity 0.25s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        transform: translateZ(0);
+        will-change: opacity;
+        overflow: hidden;
+      }
+
+      .splash-status.updating {
+        opacity: 0.5;
+      }
+
+      .splash-decoration {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        z-index: 0;
+      }
+
+      .splash-circle {
+        position: absolute;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.05);
+        animation: float-slow 8s ease-in-out infinite;
+      }
+
+      .splash-circle:nth-child(1) {
+        width: 300px;
+        height: 300px;
+        top: -150px;
+        right: -150px;
+        animation-delay: 0s;
+      }
+
+      .splash-circle:nth-child(2) {
+        width: 200px;
+        height: 200px;
+        bottom: -100px;
+        left: -100px;
+        animation-delay: 2s;
+      }
+
+      .splash-circle:nth-child(3) {
+        width: 150px;
+        height: 150px;
+        top: 50%;
+        left: 10%;
+        animation-delay: 4s;
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+
+      @keyframes fadeInScale {
+        from {
+          opacity: 0;
+          transform: scale(0.8) translateY(-10px);
+        }
+        to {
+          opacity: 1;
+          transform: scale(1) translateY(0);
+        }
+      }
+
+      @keyframes fadeInUp {
+        from {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0) translateZ(0);
+        }
+      }
+
+      @keyframes float {
+        0%, 100% {
+          transform: translateY(0px);
+        }
+        50% {
+          transform: translateY(-10px);
+        }
+      }
+
+      @keyframes float-slow {
+        0%, 100% {
+          transform: translate(0, 0) scale(1);
+        }
+        33% {
+          transform: translate(30px, -30px) scale(1.1);
+        }
+        66% {
+          transform: translate(-20px, 20px) scale(0.9);
+        }
+      }
+
+      @keyframes pulse-glow {
+        0%, 100% {
+          opacity: 0.3;
+          transform: scale(1);
+        }
+        50% {
+          opacity: 0.5;
+          transform: scale(1.1);
+        }
+      }
+
+      #root {
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.3s ease-in, visibility 0.3s ease-in;
+        background: transparent;
+      }
+
+      #root.loaded {
+        opacity: 1;
+        visibility: visible;
+      }
+    </style>
   </head>
-  <body>
+  <body style="margin: 0; padding: 0; background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 50%, #1e40af 100%);">
+    <script>
+      // Show window after HTML is loaded and splash screen is ready
+      const showWindow = () => {
+        if (window.__TAURI__) {
+          window.__TAURI__.window.getCurrent().show().catch(() => {});
+        }
+      };
+      
+      // Start loading timer
+      const startTime = Date.now();
+      let timerInterval = null;
+      
+      // Function to get current elapsed time (works even before timer starts)
+      window.getTimerElapsed = () => {
+        // Always return elapsed time if startTime is set
+        if (startTime) {
+          return Math.floor((Date.now() - startTime) / 1000);
+        }
+        return null;
+      };
+      
+      const updateTimer = () => {
+        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        const statusElement = document.getElementById('splash-status');
+        if (statusElement && !statusElement.classList.contains('updating')) {
+          const baseText = statusElement.getAttribute('data-base-text') || statusElement.textContent.replace(/\s*\(\d+s\)$/, '') || 'Loading...';
+          const newText = `${baseText} (${elapsed}s)`;
+          statusElement.textContent = newText;
+        }
+      };
+      
+      // Initialize timer when DOM is ready
+      window.initTimer = () => {
+        const statusElement = document.getElementById('splash-status');
+        if (statusElement && !timerInterval) {
+          statusElement.setAttribute('data-base-text', 'Loading application modules...');
+          statusElement.textContent = 'Loading application modules... (0s)';
+          // Start timer
+          timerInterval = setInterval(updateTimer, 1000);
+        }
+      };
+      
+      // Stop timer when app loads (will be called from main.tsx)
+      window.stopLoadingTimer = () => {
+        if (timerInterval) {
+          clearInterval(timerInterval);
+          timerInterval = null;
+        }
+      };
+      
+      // Show window when DOM is ready (immediately)
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+          // Show immediately - splash screen is already in DOM
+          showWindow();
+          // Initialize timer after DOM is loaded (use setTimeout to ensure element exists)
+          setTimeout(initTimer, 0);
+        });
+      } else {
+        // DOM already loaded - show immediately
+        showWindow();
+        // Initialize timer immediately (use setTimeout to ensure element exists)
+        setTimeout(initTimer, 0);
+      }
+      
+      // Also show on window load event as fallback
+      window.addEventListener('load', showWindow);
+    </script>
+    <!-- Splash Screen -->
+    <div id="splash-screen">
+      <div class="splash-decoration">
+        <div class="splash-circle"></div>
+        <div class="splash-circle"></div>
+        <div class="splash-circle"></div>
+      </div>
+      <div class="splash-content">
+        <div class="splash-logo-wrapper">
+          <div class="splash-logo">⏱️</div>
+        </div>
+        <div class="splash-title">TimeTracker</div>
+        <div class="splash-subtitle">Tracking your time, effortlessly</div>
+        <div class="splash-status" id="splash-status">Initializing...</div>
+      </div>
+    </div>
+    
     <div id="root"></div>
     <script type="module" src="/frontend/main.tsx"></script>
+    <script>
+      // Initialize timer after all elements are in DOM
+      if (window.initTimer) {
+        window.initTimer();
+      } else {
+        // Fallback: wait for element to appear
+        const checkAndInit = () => {
+          const statusElement = document.getElementById('splash-status');
+          if (statusElement && window.initTimer) {
+            window.initTimer();
+          } else if (!statusElement) {
+            setTimeout(checkAndInit, 10);
+          }
+        };
+        checkAndInit();
+      }
+    </script>
   </body>
 </html>

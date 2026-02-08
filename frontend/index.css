@@ -37,6 +37,7 @@ html, body, #root {
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  /* Keep splash screen background until app loads */
   background-color: var(--bg-primary);
   color: var(--text-primary);
   overflow: hidden;

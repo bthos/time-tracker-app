@@ -32,10 +32,6 @@ export async function loadPluginFrontend(
   }
 
   try {
-    // #region agent log
-    fetch('http://127.0.0.1:7250/ingest/88d94c84-1935-401d-8623-faad62dde354',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'pluginLoader.ts:34',message:'Loading plugin frontend',data:{pluginId,frontendEntry:manifest.frontend?.entry},timestamp:Date.now(),runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
-    
     // Normalize entry path - remove leading 'frontend/' if present since we add it below
     let entryPath = manifest.frontend.entry || '';
     if (entryPath.startsWith('frontend/')) {
@@ -46,10 +42,6 @@ export async function loadPluginFrontend(
     // For now, we'll use dynamic imports from a known location
     // TODO: Update this to load from actual plugin bundle location
     const modulePath = `/plugins/${pluginId}/frontend/${entryPath}`;
-    
-    // #region agent log
-    fetch('http://127.0.0.1:7250/ingest/88d94c84-1935-401d-8623-faad62dde354',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'pluginLoader.ts:42',message:'Constructed module path',data:{pluginId,originalEntry:manifest.frontend?.entry,normalizedEntry:entryPath,modulePath},timestamp:Date.now(),runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
     
     // Dynamic import of the plugin module
     const module = await import(/* @vite-ignore */ modulePath);

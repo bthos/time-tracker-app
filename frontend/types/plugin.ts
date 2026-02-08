@@ -14,16 +14,11 @@ export interface PluginManifest {
     max_core_version?: string;
   };
   backend?: {
-    crate_name: string;
     library_name: string;
-    entry_point: string;
   };
   frontend?: {
     entry?: string;
     components?: string[];
-  };
-  build?: {
-    targets: string[];
   };
 }
 

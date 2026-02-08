@@ -3150,7 +3150,7 @@ impl Database {
                                     .map_err(|e| format!("Failed to add column {} to {}: {}", column, table, e))?;
                                 
                                 // Add foreign key constraint if specified
-                                if let Some(fk) = foreign_key {
+                                if foreign_key.is_some() {
                                     // SQLite doesn't support adding foreign keys via ALTER TABLE ADD COLUMN
                                     // Foreign keys are checked at runtime if foreign keys are enabled
                                     // We'll create an index for performance
@@ -3169,7 +3169,7 @@ impl Database {
                             tx.execute(&sql, [])
                                 .map_err(|e| format!("Failed to create index {}: {}", index, e))?;
                         }
-                        SchemaChange::AddForeignKey { table, column, foreign_table, foreign_column } => {
+                        SchemaChange::AddForeignKey { table, column, foreign_table: _, foreign_column: _ } => {
                             // SQLite doesn't support adding foreign keys after table creation
                             // We'll just create an index for performance
                             let index_name = format!("idx_{}_{}_fk", table, column);

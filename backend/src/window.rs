@@ -42,6 +42,8 @@ impl WindowTracker {
                 #[cfg(windows)]
                 {
                     // Use Windows APIs to get window title and process name
+                    // Note: active_window is not used on Windows, we use native APIs instead
+                    let _ = active_window;
                     unsafe {
                         let hwnd = GetForegroundWindow();
                         if hwnd.is_null() {
