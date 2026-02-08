@@ -161,69 +161,6 @@ impl Database {
 
             CREATE INDEX IF NOT EXISTS idx_manual_entries_started ON manual_entries(started_at);
 
-            -- Projects table
-            CREATE TABLE IF NOT EXISTS projects (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                client_name TEXT,
-                color TEXT DEFAULT '#888888',
-                is_billable BOOLEAN DEFAULT FALSE,
-                hourly_rate REAL DEFAULT 0.0,
-                budget_hours REAL,
-                created_at INTEGER NOT NULL,
-                archived BOOLEAN DEFAULT FALSE
-            );
-
-            CREATE INDEX IF NOT EXISTS idx_projects_archived ON projects(archived);
-
-            -- Tasks table
-            CREATE TABLE IF NOT EXISTS tasks (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                project_id INTEGER NOT NULL,
-                name TEXT NOT NULL,
-                description TEXT,
-                created_at INTEGER NOT NULL,
-                archived BOOLEAN DEFAULT FALSE,
-                FOREIGN KEY (project_id) REFERENCES projects(id)
-            );
-
-            CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks(project_id);
-            CREATE INDEX IF NOT EXISTS idx_tasks_archived ON tasks(archived);
-
-            -- Focus sessions table
-            CREATE TABLE IF NOT EXISTS focus_sessions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                started_at INTEGER NOT NULL,
-                ended_at INTEGER,
-                duration_sec INTEGER,
-                pomodoro_type TEXT DEFAULT 'work',
-                project_id INTEGER,
-                task_id INTEGER,
-                completed BOOLEAN DEFAULT FALSE,
-                FOREIGN KEY (project_id) REFERENCES projects(id),
-                FOREIGN KEY (task_id) REFERENCES tasks(id)
-            );
-
-            CREATE INDEX IF NOT EXISTS idx_focus_sessions_started ON focus_sessions(started_at);
-
-            -- Goals table
-            CREATE TABLE IF NOT EXISTS goals (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                goal_type TEXT NOT NULL,
-                target_seconds INTEGER NOT NULL,
-                category_id INTEGER,
-                project_id INTEGER,
-                start_date INTEGER NOT NULL,
-                end_date INTEGER,
-                created_at INTEGER NOT NULL,
-                active BOOLEAN DEFAULT TRUE,
-                FOREIGN KEY (category_id) REFERENCES categories(id),
-                FOREIGN KEY (project_id) REFERENCES projects(id)
-            );
-
-            CREATE INDEX IF NOT EXISTS idx_goals_active ON goals(active);
-            CREATE INDEX IF NOT EXISTS idx_goals_type ON goals(goal_type);
-
             -- Settings table
             CREATE TABLE IF NOT EXISTS settings (
                 key TEXT PRIMARY KEY,
@@ -515,33 +452,8 @@ impl Database {
 
     fn migrate_v3(&self, conn: &Connection) -> Result<()> {
         let tx = conn.unchecked_transaction()?;
-        let _ = tx.execute_batch(r#"
-            CREATE TABLE IF NOT EXISTS projects (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                client_name TEXT,
-                color TEXT DEFAULT '#888888',
-                is_billable BOOLEAN DEFAULT FALSE,
-                hourly_rate REAL DEFAULT 0.0,
-                budget_hours REAL,
-                created_at INTEGER NOT NULL,
-                archived BOOLEAN DEFAULT FALSE
-            );
-            CREATE INDEX IF NOT EXISTS idx_projects_archived ON projects(archived);
-        "#);
-        let _ = tx.execute_batch(r#"
-            CREATE TABLE IF NOT EXISTS tasks (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                project_id INTEGER NOT NULL,
-                name TEXT NOT NULL,
-                description TEXT,
-                created_at INTEGER NOT NULL,
-                archived BOOLEAN DEFAULT FALSE,
-                FOREIGN KEY (project_id) REFERENCES projects(id)
-            );
-            CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks(project_id);
-            CREATE INDEX IF NOT EXISTS idx_tasks_archived ON tasks(archived);
-        "#);
+        // Note: Projects and tasks tables are now created by plugins via schema extensions
+        // Only add columns to existing tables
         let _ = tx.execute("ALTER TABLE activities ADD COLUMN project_id INTEGER", []);
         let _ = tx.execute("ALTER TABLE activities ADD COLUMN task_id INTEGER", []);
         let _ = tx.execute("ALTER TABLE manual_entries ADD COLUMN project_id INTEGER", []);
@@ -558,21 +470,7 @@ impl Database {
 
     fn migrate_v4(&self, conn: &Connection) -> Result<()> {
         let tx = conn.unchecked_transaction()?;
-        let _ = tx.execute_batch(r#"
-            CREATE TABLE IF NOT EXISTS focus_sessions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                started_at INTEGER NOT NULL,
-                ended_at INTEGER,
-                duration_sec INTEGER,
-                pomodoro_type TEXT DEFAULT 'work',
-                project_id INTEGER,
-                task_id INTEGER,
-                completed BOOLEAN DEFAULT FALSE,
-                FOREIGN KEY (project_id) REFERENCES projects(id),
-                FOREIGN KEY (task_id) REFERENCES tasks(id)
-            );
-            CREATE INDEX IF NOT EXISTS idx_focus_sessions_started ON focus_sessions(started_at);
-        "#);
+        // Note: focus_sessions table is now created by pomodoro plugin via schema extensions
         tx.execute(
             "INSERT OR REPLACE INTO settings (key, value) VALUES ('schema_version', '4')",
             [],
@@ -583,23 +481,7 @@ impl Database {
 
     fn migrate_v5(&self, conn: &Connection) -> Result<()> {
         let tx = conn.unchecked_transaction()?;
-        let _ = tx.execute_batch(r#"
-            CREATE TABLE IF NOT EXISTS goals (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                goal_type TEXT NOT NULL,
-                target_seconds INTEGER NOT NULL,
-                category_id INTEGER,
-                project_id INTEGER,
-                start_date INTEGER NOT NULL,
-                end_date INTEGER,
-                created_at INTEGER NOT NULL,
-                active BOOLEAN DEFAULT TRUE,
-                FOREIGN KEY (category_id) REFERENCES categories(id),
-                FOREIGN KEY (project_id) REFERENCES projects(id)
-            );
-            CREATE INDEX IF NOT EXISTS idx_goals_active ON goals(active);
-            CREATE INDEX IF NOT EXISTS idx_goals_type ON goals(goal_type);
-        "#);
+        // Note: goals table is now created by goals plugin via schema extensions
         tx.execute(
             "INSERT OR REPLACE INTO settings (key, value) VALUES ('schema_version', '5')",
             [],
@@ -3124,13 +3006,97 @@ impl Database {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         let tx = conn.unchecked_transaction().map_err(|e| format!("Failed to start transaction: {}", e))?;
         
-        // Apply schema extensions for all entity types
+        // First, handle CreateTable operations (these can create new tables)
+        // We need to collect all CreateTable operations first
+        let mut tables_to_create: std::collections::HashSet<String> = std::collections::HashSet::new();
+        
+        for entity_type in [EntityType::Activity, EntityType::ManualEntry, EntityType::Category] {
+            let extensions = extension_registry.get_schema_extensions(entity_type);
+            for extension in extensions {
+                for schema_change in &extension.schema_changes {
+                    if let SchemaChange::CreateTable { table, .. } = schema_change {
+                        tables_to_create.insert(table.clone());
+                    }
+                }
+            }
+        }
+        
+        // Apply CreateTable operations
+        for entity_type in [EntityType::Activity, EntityType::ManualEntry, EntityType::Category] {
+            let extensions = extension_registry.get_schema_extensions(entity_type);
+            for extension in extensions {
+                for schema_change in &extension.schema_changes {
+                    if let SchemaChange::CreateTable { table, columns } = schema_change {
+                        // Check if table already exists
+                        let table_exists: bool = tx.query_row(
+                            "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name=?)",
+                            params![table],
+                            |row| row.get(0),
+                        ).unwrap_or(false);
+                        
+                        if !table_exists {
+                            // Build CREATE TABLE SQL
+                            let mut column_defs = Vec::new();
+                            let mut indexes = Vec::new();
+                            
+                            for col in columns {
+                                let mut col_def = format!("{} {}", col.name, col.column_type);
+                                
+                                if col.primary_key {
+                                    col_def.push_str(" PRIMARY KEY AUTOINCREMENT");
+                                }
+                                
+                                if !col.nullable {
+                                    col_def.push_str(" NOT NULL");
+                                }
+                                
+                                if let Some(default_val) = &col.default {
+                                    col_def.push_str(&format!(" DEFAULT {}", default_val));
+                                }
+                                
+                                if let Some(fk) = &col.foreign_key {
+                                    col_def.push_str(&format!(" REFERENCES {}({})", fk.table, fk.column));
+                                }
+                                
+                                column_defs.push(col_def);
+                                
+                                // Track foreign keys for index creation
+                                if col.foreign_key.is_some() {
+                                    indexes.push(format!("CREATE INDEX IF NOT EXISTS idx_{}_{} ON {}({})", 
+                                        table, col.name, table, col.name));
+                                }
+                            }
+                            
+                            let create_sql = format!(
+                                "CREATE TABLE IF NOT EXISTS {} ({})",
+                                table,
+                                column_defs.join(", ")
+                            );
+                            
+                            tx.execute(&create_sql, [])
+                                .map_err(|e| format!("Failed to create table {}: {}", table, e))?;
+                            
+                            // Create indexes for foreign keys
+                            for index_sql in indexes {
+                                tx.execute(&index_sql, []).ok();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Apply schema extensions for all entity types (AddColumn, AddIndex, AddForeignKey)
         for entity_type in [EntityType::Activity, EntityType::ManualEntry, EntityType::Category] {
             let extensions = extension_registry.get_schema_extensions(entity_type);
             
             for extension in extensions {
                 for schema_change in &extension.schema_changes {
                     match schema_change {
+                        SchemaChange::CreateTable { .. } => {
+                            // Already handled above, skip
+                            continue;
+                        }
                         SchemaChange::AddColumn { table, column, column_type, default, foreign_key } => {
                             // Check if column already exists
                             let column_exists: bool = tx.query_row(

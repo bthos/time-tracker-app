@@ -15,6 +15,7 @@ mod window;
 use commands::AppState;
 use database::Database;
 use plugin_system::{PluginRegistry, ExtensionRegistry, Plugin};
+use plugin_system::loader::PluginLoader;
 use plugins::{ProjectsTasksPlugin, BillingPlugin, PomodoroPlugin, GoalsPlugin};
 use std::sync::{Arc, Mutex};
 use tauri::Manager;
@@ -115,14 +116,45 @@ fn main() {
     let extension_registry = Arc::new(ExtensionRegistry::new());
     let plugin_registry = Arc::new(PluginRegistry::new(Arc::clone(&db)));
     
+    // Get plugins directory
+    let plugins_dir = data_dir.join("plugins");
+    let plugin_loader = PluginLoader::new(plugins_dir);
+    
     // Install built-in plugins if not already installed
     if let Err(e) = install_builtin_plugins(&db, &plugin_registry, &extension_registry) {
         eprintln!("Warning: Failed to install built-in plugins: {}", e);
     }
     
-    // Load and initialize built-in plugins
+    // Load and initialize built-in plugins (statically compiled)
     if let Err(e) = load_builtin_plugins(&db, &plugin_registry, &extension_registry) {
         eprintln!("Warning: Failed to load built-in plugins: {}", e);
+    }
+    
+    // Load and initialize dynamically installed plugins
+    match plugin_loader.load_all_installed_plugins(&db) {
+        Ok(dynamic_plugins) => {
+            use plugin_system::api::PluginAPI;
+            use time_tracker_plugin_sdk::PluginAPIInterface;
+            
+            for (plugin_id, mut plugin) in dynamic_plugins {
+                let api = PluginAPI::new(Arc::clone(&db), Arc::clone(&extension_registry), plugin_id.clone());
+                match plugin.initialize(&api as &dyn PluginAPIInterface) {
+                    Ok(()) => {
+                        if let Err(e) = plugin_registry.register(plugin) {
+                            eprintln!("Warning: Failed to register dynamic plugin {}: {}", plugin_id, e);
+                        } else {
+                            eprintln!("Initialized and registered dynamic plugin: {}", plugin_id);
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("Warning: Failed to initialize dynamic plugin {}: {}", plugin_id, e);
+                    }
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("Warning: Failed to load dynamic plugins: {}", e);
+        }
     }
     
     // Apply plugin extensions to database schema

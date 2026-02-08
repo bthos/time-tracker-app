@@ -3,11 +3,15 @@
 use std::path::{Path, PathBuf};
 use std::fs;
 use std::io::Write;
+use std::sync::{Arc, Mutex};
+use libloading::Library;
 use crate::plugin_system::discovery::{PluginManifest, GitHubReleaseAsset};
 
 /// Plugin loader for dynamic libraries
 pub struct PluginLoader {
     plugins_dir: PathBuf,
+    /// Keep loaded libraries alive so plugin symbols remain valid
+    loaded_libraries: Arc<Mutex<Vec<Library>>>,
 }
 
 impl PluginLoader {
@@ -16,7 +20,10 @@ impl PluginLoader {
         // Ensure plugins directory exists
         fs::create_dir_all(&plugins_dir).ok();
         
-        Self { plugins_dir }
+        Self { 
+            plugins_dir,
+            loaded_libraries: Arc::new(Mutex::new(Vec::new())),
+        }
     }
 
     /// Get plugins directory path
@@ -192,7 +199,6 @@ impl PluginLoader {
             None
         }
     }
-}
 
     /// Load a plugin dynamically from its installed directory
     /// Returns the loaded plugin instance ready for initialization
@@ -236,21 +242,58 @@ impl PluginLoader {
                 return Err("Plugin creation function returned null pointer".to_string());
             }
             
-            // Convert raw pointer to Box<dyn Plugin>
-            // Note: The library must be kept alive for the plugin to work
-            // We'll need to store the Library handle somewhere
-            // For now, we'll leak it (not ideal, but works for MVP)
-            std::mem::forget(lib);
+            // Store the library handle to keep it loaded
+            // This ensures plugin symbols remain valid
+            if let Ok(mut libs) = self.loaded_libraries.lock() {
+                libs.push(lib);
+            } else {
+                // If we can't store it, leak it to prevent crashes
+                std::mem::forget(lib);
+            }
             
+            // Convert raw pointer to Box<dyn Plugin>
             let plugin = unsafe { Box::from_raw(plugin_ptr) };
             
             Ok(plugin)
         }
     }
+    
+    /// Load all installed plugins from the plugins directory
+    /// Returns a vector of (plugin_id, plugin_instance) tuples
+    pub fn load_all_installed_plugins(
+        &self,
+        db: &crate::database::Database,
+    ) -> Result<Vec<(String, Box<dyn time_tracker_plugin_sdk::Plugin>)>, String> {
+        let mut loaded_plugins = Vec::new();
+        
+        // Get list of installed plugins from database
+        let installed_plugins = db.get_installed_plugins()
+            .map_err(|e| format!("Failed to get installed plugins: {}", e))?;
+        
+        for (plugin_id, _name, _version, _description, _repo_url, _manifest_path, is_builtin, enabled) in installed_plugins {
+            // Skip built-in plugins (they're loaded statically)
+            if is_builtin {
+                continue;
+            }
+            
+            // Skip disabled plugins
+            if !enabled {
+                continue;
+            }
+            
+            // Try to load the plugin dynamically
+            match self.load_dynamic_plugin(&plugin_id) {
+                Ok(plugin) => {
+                    loaded_plugins.push((plugin_id.clone(), plugin));
+                    eprintln!("Loaded dynamic plugin: {}", plugin_id);
+                }
+                Err(e) => {
+                    eprintln!("Warning: Failed to load plugin {}: {}", plugin_id, e);
+                    // Continue loading other plugins even if one fails
+                }
+            }
+        }
+        
+        Ok(loaded_plugins)
+    }
 }
-
-// Note: In a production implementation, we'd want to:
-// 1. Store Library handles to keep them loaded
-// 2. Implement proper cleanup on plugin unload
-// 3. Handle version compatibility checking
-// 4. Support hot-reloading (optional)
