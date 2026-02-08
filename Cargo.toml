@@ -3,7 +3,7 @@ members = ["backend", "plugin-sdk", "plugins/projects-tasks", "plugins/billing",
 resolver = "2"
 
 [workspace.package]
-version = "0.2.7"
+version = "0.2.8"
 authors = ["TimeTracker"]
 license = "MIT"
 repository = "https://github.com/bthos/time-tracker-app"
