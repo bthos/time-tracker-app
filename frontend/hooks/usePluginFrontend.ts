@@ -41,6 +41,10 @@ export function usePluginFrontend() {
       try {
         // Get plugin manifest (this would come from backend in real implementation)
         // For now, we'll construct it from plugin data
+        // #region agent log
+        fetch('http://127.0.0.1:7250/ingest/88d94c84-1935-401d-8623-faad62dde354',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'usePluginFrontend.ts:44',message:'Preparing plugin manifest',data:{pluginId:plugin.id,frontendEntry:plugin.frontend_entry,hasFrontendEntry:!!plugin.frontend_entry},timestamp:Date.now(),runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
+        
         const manifest = {
           id: plugin.id,
           frontend: {

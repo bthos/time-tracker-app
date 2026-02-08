@@ -6,6 +6,9 @@ license.workspace = true
 repository.workspace = true
 edition.workspace = true
 description = "SDK for developing plugins for Time Tracker"
+keywords = ["time-tracker", "plugin", "sdk", "tauri", "time-tracking"]
+categories = ["development-tools", "api-bindings"]
+readme = "README.md"
 
 [dependencies]
 serde.workspace = true

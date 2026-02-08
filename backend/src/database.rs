@@ -201,7 +201,7 @@ impl Database {
             }
             Some(_) => {
                 // Existing database -- run incremental migrations
-                self.migrate(&conn)?;
+        self.migrate(&conn)?;
             }
         }
 
@@ -215,18 +215,18 @@ impl Database {
         // Only create default categories and rules on first run
         if !default_data_initialized {
             // Insert default categories
-            // Regular categories use AUTOINCREMENT (no id specified)
-            conn.execute_batch(r#"
-                INSERT OR IGNORE INTO categories (name, color, icon, is_productive, sort_order, is_system, is_pinned) VALUES
-                    ('Work', '#4CAF50', '💼', TRUE, 1, FALSE, FALSE),
-                    ('Communication', '#2196F3', '💬', TRUE, 2, FALSE, TRUE),
-                    ('Meetings', '#9C27B0', '🎥', TRUE, 3, FALSE, TRUE),
-                    ('Browser', '#FF9800', '🌐', NULL, 4, FALSE, FALSE),
-                    ('Entertainment', '#F44336', '🎮', FALSE, 5, FALSE, FALSE),
-                    ('Personal', '#9E9E9E', '🏠', FALSE, 9, FALSE, TRUE);
-            "#)?;
-            
-            // System categories use negative IDs to avoid conflicts with regular categories
+        // Regular categories use AUTOINCREMENT (no id specified)
+        conn.execute_batch(r#"
+            INSERT OR IGNORE INTO categories (name, color, icon, is_productive, sort_order, is_system, is_pinned) VALUES
+                ('Work', '#4CAF50', '💼', TRUE, 1, FALSE, FALSE),
+                ('Communication', '#2196F3', '💬', TRUE, 2, FALSE, TRUE),
+                ('Meetings', '#9C27B0', '🎥', TRUE, 3, FALSE, TRUE),
+                ('Browser', '#FF9800', '🌐', NULL, 4, FALSE, FALSE),
+                ('Entertainment', '#F44336', '🎮', FALSE, 5, FALSE, FALSE),
+                ('Personal', '#9E9E9E', '🏠', FALSE, 9, FALSE, TRUE);
+        "#)?;
+        
+        // System categories use negative IDs to avoid conflicts with regular categories
             for (id, name, color, icon, is_productive, sort_order, is_pinned) in [
                 (-1, "Uncategorized", "#9E9E9E", "❓", None::<bool>, 8, false),
                 (-2, "Break", "#795548", "☕", Some(false), 7, true),
@@ -249,28 +249,28 @@ impl Database {
             }
 
             // Insert default rules
-            let default_rules = vec![
-                ("app_name", "Code", "Work", 10),
-                ("app_name", "Visual Studio", "Work", 10),
-                ("app_name", "IntelliJ", "Work", 10),
-                ("app_name", "WebStorm", "Work", 10),
-                ("app_name", "PyCharm", "Work", 10),
-                ("app_name", "Slack", "Communication", 10),
-                ("app_name", "Discord", "Communication", 10),
-                ("app_name", "Microsoft Teams", "Communication", 10),
-                ("app_name", "Telegram", "Communication", 10),
-                ("app_name", "Zoom", "Meetings", 10),
-                ("app_name", "Google Meet", "Meetings", 10),
-                ("app_name", "Chrome", "Browser", 5),
-                ("app_name", "Firefox", "Browser", 5),
-                ("app_name", "Safari", "Browser", 5),
-                ("app_name", "Edge", "Browser", 5),
-                ("window_title", "*YouTube*", "Entertainment", 15),
-                ("window_title", "*Netflix*", "Entertainment", 15),
-                ("window_title", "*Twitch*", "Entertainment", 15),
-            ];
+        let default_rules = vec![
+            ("app_name", "Code", "Work", 10),
+            ("app_name", "Visual Studio", "Work", 10),
+            ("app_name", "IntelliJ", "Work", 10),
+            ("app_name", "WebStorm", "Work", 10),
+            ("app_name", "PyCharm", "Work", 10),
+            ("app_name", "Slack", "Communication", 10),
+            ("app_name", "Discord", "Communication", 10),
+            ("app_name", "Microsoft Teams", "Communication", 10),
+            ("app_name", "Telegram", "Communication", 10),
+            ("app_name", "Zoom", "Meetings", 10),
+            ("app_name", "Google Meet", "Meetings", 10),
+            ("app_name", "Chrome", "Browser", 5),
+            ("app_name", "Firefox", "Browser", 5),
+            ("app_name", "Safari", "Browser", 5),
+            ("app_name", "Edge", "Browser", 5),
+            ("window_title", "*YouTube*", "Entertainment", 15),
+            ("window_title", "*Netflix*", "Entertainment", 15),
+            ("window_title", "*Twitch*", "Entertainment", 15),
+        ];
 
-            for (rule_type, pattern, category_name, priority) in default_rules {
+        for (rule_type, pattern, category_name, priority) in default_rules {
                 // Insert rule if category exists
                 let _ = conn.execute(
                     "INSERT INTO rules (rule_type, pattern, category_id, priority)
@@ -317,9 +317,9 @@ impl Database {
     fn get_schema_version(&self, conn: &Connection) -> i64 {
         conn.query_row(
             "SELECT CAST(value AS INTEGER) FROM settings WHERE key = 'schema_version'",
-            [],
-            |row| row.get(0),
-        )
+                [],
+                |row| row.get(0),
+            )
         .unwrap_or(0)
     }
 
@@ -357,8 +357,8 @@ impl Database {
         )?;
         tx.execute(
             "INSERT OR REPLACE INTO settings (key, value) VALUES ('schema_version', '11')",
-            [],
-        )?;
+                [],
+            )?;
         tx.commit()?;
         Ok(())
     }
@@ -420,9 +420,9 @@ impl Database {
                 tx.execute_batch(r#"
                     CREATE TABLE installed_plugins_new (
                         id TEXT PRIMARY KEY,
-                        name TEXT NOT NULL,
+                    name TEXT NOT NULL,
                         version TEXT NOT NULL,
-                        description TEXT,
+                    description TEXT,
                         repository_url TEXT,
                         manifest_path TEXT,
                         installed_at INTEGER NOT NULL,
@@ -493,9 +493,9 @@ impl Database {
         let _ = tx.execute("CREATE INDEX IF NOT EXISTS idx_activities_domain ON activities(domain)", []);
         let _ = tx.execute("CREATE INDEX IF NOT EXISTS idx_activities_project ON activities(project_id)", []);
         tx.execute(
-            "INSERT OR REPLACE INTO settings (key, value) VALUES ('schema_version', '3')",
-            [],
-        )?;
+                "INSERT OR REPLACE INTO settings (key, value) VALUES ('schema_version', '3')",
+                [],
+            )?;
         tx.commit()?;
         Ok(())
     }
@@ -504,9 +504,9 @@ impl Database {
         let tx = conn.unchecked_transaction()?;
         // Note: focus_sessions table is now created by pomodoro plugin via schema extensions
         tx.execute(
-            "INSERT OR REPLACE INTO settings (key, value) VALUES ('schema_version', '4')",
-            [],
-        )?;
+                "INSERT OR REPLACE INTO settings (key, value) VALUES ('schema_version', '4')",
+                [],
+            )?;
         tx.commit()?;
         Ok(())
     }
@@ -515,9 +515,9 @@ impl Database {
         let tx = conn.unchecked_transaction()?;
         // Note: goals table is now created by goals plugin via schema extensions
         tx.execute(
-            "INSERT OR REPLACE INTO settings (key, value) VALUES ('schema_version', '5')",
-            [],
-        )?;
+                "INSERT OR REPLACE INTO settings (key, value) VALUES ('schema_version', '5')",
+                [],
+            )?;
         tx.commit()?;
         Ok(())
     }
@@ -525,21 +525,21 @@ impl Database {
     fn migrate_v6(&self, conn: &Connection) -> Result<()> {
         let tx = conn.unchecked_transaction()?;
         let _ = tx.execute_batch(r#"
-            DELETE FROM rules
-            WHERE id NOT IN (
-                SELECT MIN(id)
-                FROM rules
-                GROUP BY rule_type, pattern, category_id
-            );
-        "#);
+                DELETE FROM rules
+                WHERE id NOT IN (
+                    SELECT MIN(id)
+                    FROM rules
+                    GROUP BY rule_type, pattern, category_id
+                );
+            "#);
         let _ = tx.execute(
-            "CREATE UNIQUE INDEX IF NOT EXISTS idx_rules_unique ON rules(rule_type, pattern, category_id)",
-            [],
-        );
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_rules_unique ON rules(rule_type, pattern, category_id)",
+                [],
+            );
         tx.execute(
-            "INSERT OR REPLACE INTO settings (key, value) VALUES ('schema_version', '6')",
-            [],
-        )?;
+                "INSERT OR REPLACE INTO settings (key, value) VALUES ('schema_version', '6')",
+                [],
+            )?;
         tx.commit()?;
         Ok(())
     }
@@ -549,57 +549,57 @@ impl Database {
         let _ = tx.execute("ALTER TABLE categories ADD COLUMN is_system BOOLEAN DEFAULT FALSE", []);
         let _ = tx.execute("ALTER TABLE categories ADD COLUMN is_pinned BOOLEAN DEFAULT FALSE", []);
         let _ = tx.execute(
-            "UPDATE categories SET is_system = TRUE WHERE name IN ('Thinking', 'Break', 'Uncategorized')",
-            [],
-        );
+                "UPDATE categories SET is_system = TRUE WHERE name IN ('Thinking', 'Break', 'Uncategorized')",
+                [],
+            );
         let _ = tx.execute(
-            "UPDATE categories SET is_pinned = TRUE WHERE name IN ('Thinking', 'Break', 'Meetings', 'Communication', 'Personal')",
-            [],
-        );
+                "UPDATE categories SET is_pinned = TRUE WHERE name IN ('Thinking', 'Break', 'Meetings', 'Communication', 'Personal')",
+                [],
+            );
         let _ = tx.execute(
-            "INSERT OR IGNORE INTO categories (name, color, icon, is_productive, is_billable, hourly_rate, sort_order, is_system, is_pinned) 
-             VALUES ('Personal', '#9E9E9E', '🏠', FALSE, FALSE, 0.0, 9, FALSE, TRUE)",
-            [],
-        );
+                "INSERT OR IGNORE INTO categories (name, color, icon, is_productive, is_billable, hourly_rate, sort_order, is_system, is_pinned) 
+                 VALUES ('Personal', '#9E9E9E', '🏠', FALSE, FALSE, 0.0, 9, FALSE, TRUE)",
+                [],
+            );
         let thinking_id: Option<i64> = tx.query_row("SELECT id FROM categories WHERE name = 'Thinking'", [], |row| row.get(0)).ok();
         let break_id: Option<i64> = tx.query_row("SELECT id FROM categories WHERE name = 'Break'", [], |row| row.get(0)).ok();
         let meetings_id: Option<i64> = tx.query_row("SELECT id FROM categories WHERE name = 'Meetings'", [], |row| row.get(0)).ok();
         let communication_id: Option<i64> = tx.query_row("SELECT id FROM categories WHERE name = 'Communication'", [], |row| row.get(0)).ok();
         let personal_id: Option<i64> = tx.query_row("SELECT id FROM categories WHERE name = 'Personal'", [], |row| row.get(0)).ok();
-        if let Some(id) = thinking_id {
+            if let Some(id) = thinking_id {
             let _ = tx.execute(
-                "UPDATE manual_entries SET category_id = ? WHERE entry_type = 'thinking' AND category_id IS NULL",
-                params![id],
-            );
-        }
-        if let Some(id) = break_id {
+                    "UPDATE manual_entries SET category_id = ? WHERE entry_type = 'thinking' AND category_id IS NULL",
+                    params![id],
+                );
+            }
+            if let Some(id) = break_id {
             let _ = tx.execute(
-                "UPDATE manual_entries SET category_id = ? WHERE entry_type = 'break' AND category_id IS NULL",
-                params![id],
-            );
-        }
-        if let Some(id) = meetings_id {
+                    "UPDATE manual_entries SET category_id = ? WHERE entry_type = 'break' AND category_id IS NULL",
+                    params![id],
+                );
+            }
+            if let Some(id) = meetings_id {
             let _ = tx.execute(
-                "UPDATE manual_entries SET category_id = ? WHERE entry_type = 'meeting' AND category_id IS NULL",
-                params![id],
-            );
-        }
-        if let Some(id) = communication_id {
+                    "UPDATE manual_entries SET category_id = ? WHERE entry_type = 'meeting' AND category_id IS NULL",
+                    params![id],
+                );
+            }
+            if let Some(id) = communication_id {
             let _ = tx.execute(
-                "UPDATE manual_entries SET category_id = ? WHERE entry_type = 'call' AND category_id IS NULL",
-                params![id],
-            );
-        }
-        if let Some(id) = personal_id {
+                    "UPDATE manual_entries SET category_id = ? WHERE entry_type = 'call' AND category_id IS NULL",
+                    params![id],
+                );
+            }
+            if let Some(id) = personal_id {
             let _ = tx.execute(
-                "UPDATE manual_entries SET category_id = ? WHERE entry_type = 'personal' AND category_id IS NULL",
-                params![id],
-            );
-        }
+                    "UPDATE manual_entries SET category_id = ? WHERE entry_type = 'personal' AND category_id IS NULL",
+                    params![id],
+                );
+            }
         tx.execute(
-            "INSERT OR REPLACE INTO settings (key, value) VALUES ('schema_version', '7')",
-            [],
-        )?;
+                "INSERT OR REPLACE INTO settings (key, value) VALUES ('schema_version', '7')",
+                [],
+            )?;
         tx.commit()?;
         Ok(())
     }
@@ -611,9 +611,9 @@ impl Database {
         let _ = tx.execute("CREATE INDEX IF NOT EXISTS idx_categories_project ON categories(project_id)", []);
         let _ = tx.execute("CREATE INDEX IF NOT EXISTS idx_categories_task ON categories(task_id)", []);
         tx.execute(
-            "INSERT OR REPLACE INTO settings (key, value) VALUES ('schema_version', '8')",
-            [],
-        )?;
+                "INSERT OR REPLACE INTO settings (key, value) VALUES ('schema_version', '8')",
+                [],
+            )?;
         tx.commit()?;
         Ok(())
     }
@@ -622,9 +622,9 @@ impl Database {
         let tx = conn.unchecked_transaction()?;
         let _ = tx.execute("ALTER TABLE goals ADD COLUMN name TEXT", []);
         tx.execute(
-            "INSERT OR REPLACE INTO settings (key, value) VALUES ('schema_version', '9')",
-            [],
-        )?;
+                "INSERT OR REPLACE INTO settings (key, value) VALUES ('schema_version', '9')",
+                [],
+            )?;
         tx.commit()?;
         Ok(())
     }
@@ -632,93 +632,93 @@ impl Database {
     fn migrate_v10(&self, conn: &Connection) -> Result<()> {
         let tx = conn.unchecked_transaction()?;
         let uncategorized_id: Option<i64> = tx.query_row(
-            "SELECT id FROM categories WHERE name = 'Uncategorized' AND is_system = TRUE",
-            [],
-            |row| row.get(0),
-        ).ok();
+                "SELECT id FROM categories WHERE name = 'Uncategorized' AND is_system = TRUE",
+                [],
+                |row| row.get(0),
+            ).ok();
         let break_id: Option<i64> = tx.query_row(
-            "SELECT id FROM categories WHERE name = 'Break' AND is_system = TRUE",
-            [],
-            |row| row.get(0),
-        ).ok();
+                "SELECT id FROM categories WHERE name = 'Break' AND is_system = TRUE",
+                [],
+                |row| row.get(0),
+            ).ok();
         let thinking_id: Option<i64> = tx.query_row(
-            "SELECT id FROM categories WHERE name = 'Thinking' AND is_system = TRUE",
-            [],
-            |row| row.get(0),
-        ).ok();
-        if let Some(old_id) = uncategorized_id {
-            if old_id != SYSTEM_CATEGORY_UNCATEGORIZED {
+                "SELECT id FROM categories WHERE name = 'Thinking' AND is_system = TRUE",
+                [],
+                |row| row.get(0),
+            ).ok();
+            if let Some(old_id) = uncategorized_id {
+                if old_id != SYSTEM_CATEGORY_UNCATEGORIZED {
                 let _ = tx.execute(
-                    "UPDATE activities SET category_id = ? WHERE category_id = ?",
-                    params![SYSTEM_CATEGORY_UNCATEGORIZED, old_id],
-                );
+                        "UPDATE activities SET category_id = ? WHERE category_id = ?",
+                        params![SYSTEM_CATEGORY_UNCATEGORIZED, old_id],
+                    );
                 let _ = tx.execute(
-                    "UPDATE manual_entries SET category_id = ? WHERE category_id = ?",
-                    params![SYSTEM_CATEGORY_UNCATEGORIZED, old_id],
-                );
+                        "UPDATE manual_entries SET category_id = ? WHERE category_id = ?",
+                        params![SYSTEM_CATEGORY_UNCATEGORIZED, old_id],
+                    );
                 let _ = tx.execute(
-                    "UPDATE rules SET category_id = ? WHERE category_id = ?",
-                    params![SYSTEM_CATEGORY_UNCATEGORIZED, old_id],
-                );
+                        "UPDATE rules SET category_id = ? WHERE category_id = ?",
+                        params![SYSTEM_CATEGORY_UNCATEGORIZED, old_id],
+                    );
                 let _ = tx.execute(
-                    "UPDATE goals SET category_id = ? WHERE category_id = ?",
-                    params![SYSTEM_CATEGORY_UNCATEGORIZED, old_id],
-                );
+                        "UPDATE goals SET category_id = ? WHERE category_id = ?",
+                        params![SYSTEM_CATEGORY_UNCATEGORIZED, old_id],
+                    );
                 let _ = tx.execute("DELETE FROM categories WHERE id = ?", params![old_id]);
             }
         }
-        if let Some(old_id) = break_id {
-            if old_id != SYSTEM_CATEGORY_BREAK {
+            if let Some(old_id) = break_id {
+                if old_id != SYSTEM_CATEGORY_BREAK {
                 let _ = tx.execute(
-                    "UPDATE activities SET category_id = ? WHERE category_id = ?",
-                    params![SYSTEM_CATEGORY_BREAK, old_id],
-                );
+                        "UPDATE activities SET category_id = ? WHERE category_id = ?",
+                        params![SYSTEM_CATEGORY_BREAK, old_id],
+                    );
                 let _ = tx.execute(
-                    "UPDATE manual_entries SET category_id = ? WHERE category_id = ?",
-                    params![SYSTEM_CATEGORY_BREAK, old_id],
-                );
+                        "UPDATE manual_entries SET category_id = ? WHERE category_id = ?",
+                        params![SYSTEM_CATEGORY_BREAK, old_id],
+                    );
                 let _ = tx.execute(
-                    "UPDATE rules SET category_id = ? WHERE category_id = ?",
-                    params![SYSTEM_CATEGORY_BREAK, old_id],
-                );
+                        "UPDATE rules SET category_id = ? WHERE category_id = ?",
+                        params![SYSTEM_CATEGORY_BREAK, old_id],
+                    );
                 let _ = tx.execute(
-                    "UPDATE goals SET category_id = ? WHERE category_id = ?",
-                    params![SYSTEM_CATEGORY_BREAK, old_id],
-                );
+                        "UPDATE goals SET category_id = ? WHERE category_id = ?",
+                        params![SYSTEM_CATEGORY_BREAK, old_id],
+                    );
                 let _ = tx.execute("DELETE FROM categories WHERE id = ?", params![old_id]);
             }
         }
-        if let Some(old_id) = thinking_id {
-            if old_id != SYSTEM_CATEGORY_THINKING {
+            if let Some(old_id) = thinking_id {
+                if old_id != SYSTEM_CATEGORY_THINKING {
                 let _ = tx.execute(
-                    "UPDATE activities SET category_id = ? WHERE category_id = ?",
-                    params![SYSTEM_CATEGORY_THINKING, old_id],
-                );
+                        "UPDATE activities SET category_id = ? WHERE category_id = ?",
+                        params![SYSTEM_CATEGORY_THINKING, old_id],
+                    );
                 let _ = tx.execute(
-                    "UPDATE manual_entries SET category_id = ? WHERE category_id = ?",
-                    params![SYSTEM_CATEGORY_THINKING, old_id],
-                );
+                        "UPDATE manual_entries SET category_id = ? WHERE category_id = ?",
+                        params![SYSTEM_CATEGORY_THINKING, old_id],
+                    );
                 let _ = tx.execute(
-                    "UPDATE rules SET category_id = ? WHERE category_id = ?",
-                    params![SYSTEM_CATEGORY_THINKING, old_id],
-                );
+                        "UPDATE rules SET category_id = ? WHERE category_id = ?",
+                        params![SYSTEM_CATEGORY_THINKING, old_id],
+                    );
                 let _ = tx.execute(
-                    "UPDATE goals SET category_id = ? WHERE category_id = ?",
-                    params![SYSTEM_CATEGORY_THINKING, old_id],
-                );
+                        "UPDATE goals SET category_id = ? WHERE category_id = ?",
+                        params![SYSTEM_CATEGORY_THINKING, old_id],
+                    );
                 let _ = tx.execute("DELETE FROM categories WHERE id = ?", params![old_id]);
             }
         }
         tx.execute_batch(r#"
-            INSERT OR IGNORE INTO categories (id, name, color, icon, is_productive, sort_order, is_system, is_pinned) VALUES
-                (-1, 'Uncategorized', '#9E9E9E', '❓', NULL, 8, TRUE, FALSE),
-                (-2, 'Break', '#795548', '☕', FALSE, 7, TRUE, TRUE),
-                (-3, 'Thinking', '#00BCD4', '🧠', TRUE, 6, TRUE, TRUE);
-        "#)?;
+                INSERT OR IGNORE INTO categories (id, name, color, icon, is_productive, sort_order, is_system, is_pinned) VALUES
+                    (-1, 'Uncategorized', '#9E9E9E', '❓', NULL, 8, TRUE, FALSE),
+                    (-2, 'Break', '#795548', '☕', FALSE, 7, TRUE, TRUE),
+                    (-3, 'Thinking', '#00BCD4', '🧠', TRUE, 6, TRUE, TRUE);
+            "#)?;
         tx.execute(
-            "INSERT OR REPLACE INTO settings (key, value) VALUES ('schema_version', '10')",
-            [],
-        )?;
+                "INSERT OR REPLACE INTO settings (key, value) VALUES ('schema_version', '10')",
+                [],
+            )?;
         tx.commit()?;
         Ok(())
     }
@@ -1048,18 +1048,18 @@ impl Database {
         
         // Helper closure to map row to Activity
         let map_row = |row: &rusqlite::Row| -> Result<Activity> {
-            Ok(Activity {
-                id: row.get(0)?,
-                app_name: row.get(1)?,
-                window_title: row.get(2)?,
-                domain: row.get(3)?,
-                category_id: row.get(4)?,
-                project_id: row.get(5)?,
-                task_id: row.get(6)?,
-                started_at: row.get(7)?,
-                duration_sec: row.get(8)?,
-                is_idle: row.get(9)?,
-            })
+                Ok(Activity {
+                    id: row.get(0)?,
+                    app_name: row.get(1)?,
+                    window_title: row.get(2)?,
+                    domain: row.get(3)?,
+                    category_id: row.get(4)?,
+                    project_id: row.get(5)?,
+                    task_id: row.get(6)?,
+                    started_at: row.get(7)?,
+                    duration_sec: row.get(8)?,
+                    is_idle: row.get(9)?,
+                })
         };
         
         let activities = match (limit, offset) {
@@ -1713,15 +1713,15 @@ impl Database {
         })?;
         for row in category_rows {
             let (category_id, duration_sec) = row?;
-            let percentage = if total_seconds > 0 {
+                let percentage = if total_seconds > 0 {
                 (duration_sec as f64 / total_seconds as f64 * 100.0) as i64
-            } else {
-                0
-            };
+                } else {
+                    0
+                };
             category_stats.push(CategoryStat {
                 category: cat_map.get(&category_id).cloned(),
                 duration_sec,
-                percentage,
+                    percentage,
             });
         }
 
@@ -1747,9 +1747,9 @@ impl Database {
             app_stats.push(AppStat {
                 app_name,
                 duration_sec,
-                category,
+                    category,
             });
-        }
+                }
 
         Ok(DailyStats {
             total_seconds,
@@ -1763,7 +1763,7 @@ impl Database {
     pub fn get_top_apps(&self, start: i64, end: i64, limit: i64) -> Result<Vec<AppStat>> {
         let categories = self.get_categories()?;
         let cat_map: std::collections::HashMap<i64, Category> = categories
-            .iter()
+                    .iter()
             .map(|c| (c.id, c.clone()))
             .collect();
         let conn = self.conn.lock().unwrap();
@@ -1789,9 +1789,9 @@ impl Database {
             app_stats.push(AppStat {
                 app_name,
                 duration_sec,
-                category,
+                    category,
             });
-        }
+                }
         Ok(app_stats)
     }
 
