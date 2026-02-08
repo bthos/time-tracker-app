@@ -4,8 +4,6 @@ import { ManualEntry as ManualEntryType } from '../../types';
 import { formatDuration } from '../../utils/format';
 import Button from '../Common/Button';
 import { api } from '../../services/api';
-import { useProjects } from '../../hooks/useProjects';
-import { useTasks } from '../../hooks/useTasks';
 import { usePinnedCategories } from '../../hooks/useCategories';
 import { X, Save } from 'lucide-react';
 
@@ -18,9 +16,8 @@ interface ManualEntryFormProps {
 const ManualEntryForm: React.FC<ManualEntryFormProps> = ({ isOpen, onClose, editEntry }) => {
   const { categories } = useStore();
   const { data: pinnedCategories = [] } = usePinnedCategories();
-  const { projects = [] } = useProjects();
+  // Projects and tasks are now handled by plugins
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(editEntry?.project_id ?? null);
-  const { tasks = [] } = useTasks(selectedProjectId ?? undefined);
   const [taskId, setTaskId] = useState<number | null>(editEntry?.task_id ?? null);
   
   const [description, setDescription] = useState(editEntry?.description || '');
@@ -191,11 +188,7 @@ const ManualEntryForm: React.FC<ManualEntryFormProps> = ({ isOpen, onClose, edit
                          focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             >
               <option value="">Select project</option>
-              {projects.map((proj: { id: number; name: string; client_name?: string | null }) => (
-                <option key={proj.id} value={proj.id}>
-                  {proj.name} {proj.client_name ? `(${proj.client_name})` : ''}
-                </option>
-              ))}
+              {/* Projects are now provided by plugins */}
             </select>
             {/* Legacy project text field for backward compatibility */}
             <input
@@ -209,28 +202,7 @@ const ManualEntryForm: React.FC<ManualEntryFormProps> = ({ isOpen, onClose, edit
             />
           </div>
           
-          {/* Task */}
-          {selectedProjectId && tasks.length > 0 && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Task (optional)
-              </label>
-              <select
-                value={taskId || ''}
-                onChange={(e) => setTaskId(e.target.value ? Number(e.target.value) : null)}
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg 
-                           bg-white dark:bg-gray-700 text-gray-900 dark:text-white
-                           focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              >
-                <option value="">Select task</option>
-                {tasks.map((task: { id: number; name: string }) => (
-                  <option key={task.id} value={task.id}>
-                    {task.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          {/* Task - Tasks are now provided by plugins */}
           
           {/* Category */}
           <div>

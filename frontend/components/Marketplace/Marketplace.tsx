@@ -15,8 +15,9 @@ type Tab = 'discover' | 'installed';
 export default function Marketplace() {
   const [activeTab, setActiveTab] = useState<Tab>('discover');
   const [selectedPlugin, setSelectedPlugin] = useState<RegistryPlugin | null>(null);
+  const [installingPluginId, setInstallingPluginId] = useState<string | null>(null);
   const { plugins: registryPlugins, isLoading: isLoadingRegistry, searchPlugins } = usePluginRegistry();
-  const { plugins: installedPlugins, installPlugin } = usePlugins();
+  const { plugins: installedPlugins, installPlugin, refetch: refetchInstalledPlugins, enablePlugin, disablePlugin, uninstallPlugin } = usePlugins();
 
   const handleSearch = (query: string) => {
     searchPlugins(query);
@@ -24,18 +25,30 @@ export default function Marketplace() {
 
   const handleInstall = async (plugin: RegistryPlugin) => {
     try {
+      setInstallingPluginId(plugin.id);
       const success = await installPlugin(plugin.repository);
       if (success) {
         showSuccess(`Plugin "${plugin.name}" installed successfully`);
         setSelectedPlugin(null);
+        await refetchInstalledPlugins();
       }
     } catch (error) {
       handleApiError(error, 'Failed to install plugin');
+    } finally {
+      setInstallingPluginId(null);
     }
   };
 
-  const isInstalled = (pluginId: string) => {
-    return installedPlugins.some((p) => p.id === pluginId);
+  const isInstalled = (plugin: RegistryPlugin) => {
+    // Check by ID first (for plugins from registry)
+    if (installedPlugins.some((p) => p.id === plugin.id)) {
+      return true;
+    }
+    // Also check by repository URL (in case IDs don't match)
+    if (plugin.repository && installedPlugins.some((p) => p.repository_url === plugin.repository)) {
+      return true;
+    }
+    return false;
   };
 
   return (
@@ -106,7 +119,8 @@ export default function Marketplace() {
                   <PluginCard
                     key={plugin.id}
                     plugin={plugin}
-                    isInstalled={isInstalled(plugin.id)}
+                    isInstalled={isInstalled(plugin)}
+                    isInstalling={installingPluginId === plugin.id}
                     onInstall={handleInstall}
                     onViewDetails={setSelectedPlugin}
                   />
@@ -116,14 +130,29 @@ export default function Marketplace() {
           </div>
         )}
 
-        {activeTab === 'installed' && <InstalledPlugins />}
+        {activeTab === 'installed' && (
+          <InstalledPlugins 
+            plugins={installedPlugins}
+            isLoading={false}
+            enablePlugin={enablePlugin}
+            disablePlugin={disablePlugin}
+            uninstallPlugin={async (pluginId: string) => {
+              const success = await uninstallPlugin(pluginId);
+              if (success) {
+                await refetchInstalledPlugins();
+              }
+              return success;
+            }}
+          />
+        )}
       </div>
 
       {/* Plugin Details Modal */}
       {selectedPlugin && (
         <PluginDetails
           plugin={selectedPlugin}
-          isInstalled={isInstalled(selectedPlugin.id)}
+          isInstalled={isInstalled(selectedPlugin)}
+          isInstalling={installingPluginId === selectedPlugin.id}
           onClose={() => setSelectedPlugin(null)}
           onInstall={handleInstall}
         />

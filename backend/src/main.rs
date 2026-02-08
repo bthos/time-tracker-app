@@ -5,8 +5,6 @@ mod autostart;
 mod commands;
 mod database;
 mod idle;
-mod plugins;
-mod pomodoro;
 mod plugin_system;
 mod tracker;
 mod tray;
@@ -14,91 +12,10 @@ mod window;
 
 use commands::AppState;
 use database::Database;
-use plugin_system::{PluginRegistry, ExtensionRegistry, Plugin};
+use plugin_system::{PluginRegistry, ExtensionRegistry};
 use plugin_system::loader::PluginLoader;
-use plugins::{ProjectsTasksPlugin, BillingPlugin, PomodoroPlugin, GoalsPlugin};
 use std::sync::{Arc, Mutex};
 use tauri::Manager;
-
-/// Install built-in plugins if they're not already installed
-fn install_builtin_plugins(
-    db: &Arc<Database>,
-    _plugin_registry: &Arc<PluginRegistry>,
-    _extension_registry: &Arc<ExtensionRegistry>,
-) -> Result<(), String> {
-    let builtin_plugins = vec![
-        ("projects-tasks-plugin", "Projects/Tasks", "1.0.0", "Project and task management"),
-        ("billing-plugin", "Billing", "1.0.0", "Billable time tracking"),
-        ("pomodoro-plugin", "Pomodoro", "1.0.0", "Pomodoro timer"),
-        ("goals-plugin", "Goals", "1.0.0", "Goal tracking"),
-    ];
-    
-    for (plugin_id, name, version, description) in builtin_plugins {
-        match db.is_plugin_installed(plugin_id) {
-            Ok(false) => {
-                db.install_plugin(plugin_id, name, version, Some(description), true)?;
-                eprintln!("Installed built-in plugin: {}", plugin_id);
-            }
-            Ok(true) => {
-                // Plugin already installed
-            }
-            Err(e) => {
-                eprintln!("Warning: Failed to check if plugin {} is installed: {}", plugin_id, e);
-            }
-        }
-    }
-    
-    Ok(())
-}
-
-/// Load and initialize built-in plugins
-fn load_builtin_plugins(
-    db: &Arc<Database>,
-    plugin_registry: &Arc<PluginRegistry>,
-    extension_registry: &Arc<ExtensionRegistry>,
-) -> Result<(), String> {
-    use plugin_system::api::PluginAPI;
-    
-    use time_tracker_plugin_sdk::PluginAPIInterface;
-    
-    // Load Projects/Tasks Plugin
-    if db.is_plugin_installed("projects-tasks-plugin")? {
-        let mut plugin = ProjectsTasksPlugin::new();
-        let api = PluginAPI::new(Arc::clone(db), Arc::clone(extension_registry), "projects-tasks-plugin".to_string());
-        plugin.initialize(&api as &dyn PluginAPIInterface)?;
-        plugin_registry.register(Box::new(plugin))?;
-        eprintln!("Loaded plugin: projects-tasks-plugin");
-    }
-    
-    // Load Billing Plugin
-    if db.is_plugin_installed("billing-plugin")? {
-        let mut plugin = BillingPlugin::new();
-        let api = PluginAPI::new(Arc::clone(db), Arc::clone(extension_registry), "billing-plugin".to_string());
-        plugin.initialize(&api as &dyn PluginAPIInterface)?;
-        plugin_registry.register(Box::new(plugin))?;
-        eprintln!("Loaded plugin: billing-plugin");
-    }
-    
-    // Load Pomodoro Plugin
-    if db.is_plugin_installed("pomodoro-plugin")? {
-        let mut plugin = PomodoroPlugin::new();
-        let api = PluginAPI::new(Arc::clone(db), Arc::clone(extension_registry), "pomodoro-plugin".to_string());
-        plugin.initialize(&api as &dyn PluginAPIInterface)?;
-        plugin_registry.register(Box::new(plugin))?;
-        eprintln!("Loaded plugin: pomodoro-plugin");
-    }
-    
-    // Load Goals Plugin
-    if db.is_plugin_installed("goals-plugin")? {
-        let mut plugin = GoalsPlugin::new();
-        let api = PluginAPI::new(Arc::clone(db), Arc::clone(extension_registry), "goals-plugin".to_string());
-        plugin.initialize(&api as &dyn PluginAPIInterface)?;
-        plugin_registry.register(Box::new(plugin))?;
-        eprintln!("Loaded plugin: goals-plugin");
-    }
-    
-    Ok(())
-}
 
 fn main() {
     // Get data directory
@@ -120,17 +37,7 @@ fn main() {
     let plugins_dir = data_dir.join("plugins");
     let plugin_loader = PluginLoader::new(plugins_dir);
     
-    // Install built-in plugins if not already installed
-    if let Err(e) = install_builtin_plugins(&db, &plugin_registry, &extension_registry) {
-        eprintln!("Warning: Failed to install built-in plugins: {}", e);
-    }
-    
-    // Load and initialize built-in plugins (statically compiled)
-    if let Err(e) = load_builtin_plugins(&db, &plugin_registry, &extension_registry) {
-        eprintln!("Warning: Failed to load built-in plugins: {}", e);
-    }
-    
-    // Load and initialize dynamically installed plugins
+    // Load and initialize all installed plugins dynamically
     match plugin_loader.load_all_installed_plugins(&db) {
         Ok(dynamic_plugins) => {
             use plugin_system::api::PluginAPI;
@@ -253,40 +160,13 @@ fn main() {
             commands::show_main_window,
             commands::hide_main_window,
             commands::show_idle_prompt,
-            // Project commands
-            commands::create_project,
-            commands::get_projects,
-            commands::update_project,
-            commands::delete_project,
-            // Task commands
-            commands::create_task,
-            commands::get_tasks,
-            commands::update_task,
-            commands::delete_task,
-            // Billable time commands
-            commands::get_billable_hours,
-            commands::get_billable_revenue,
             // Domain commands
             commands::get_top_domains,
-            // Pomodoro commands
-            commands::start_pomodoro,
-            commands::stop_pomodoro,
-            commands::get_focus_sessions,
-            commands::get_completed_work_sessions_count_today,
-            commands::get_active_pomodoro_session,
-            commands::delete_focus_session,
             // Active project/task commands
             commands::set_active_project,
             commands::set_active_task,
             commands::get_active_project,
             commands::get_active_task,
-            // Goal commands
-            commands::create_goal,
-            commands::get_goals,
-            commands::update_goal,
-            commands::delete_goal,
-            commands::get_goal_progress,
-            commands::check_goal_alerts,
             // Plugin commands
             commands::get_plugin_registry,
             commands::search_plugins,

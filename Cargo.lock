@@ -3942,47 +3942,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "time-tracker-billing-plugin"
-version = "0.2.8"
-dependencies = [
- "serde",
- "serde_json",
- "time-tracker-plugin-sdk",
-]
-
-[[package]]
-name = "time-tracker-goals-plugin"
-version = "0.2.8"
-dependencies = [
- "serde",
- "serde_json",
- "time-tracker-plugin-sdk",
-]
-
-[[package]]
 name = "time-tracker-plugin-sdk"
 version = "0.2.8"
 dependencies = [
  "serde",
  "serde_json",
-]
-
-[[package]]
-name = "time-tracker-pomodoro-plugin"
-version = "0.2.8"
-dependencies = [
- "serde",
- "serde_json",
- "time-tracker-plugin-sdk",
-]
-
-[[package]]
-name = "time-tracker-projects-tasks-plugin"
-version = "0.2.8"
-dependencies = [
- "serde",
- "serde_json",
- "time-tracker-plugin-sdk",
 ]
 
 [[package]]

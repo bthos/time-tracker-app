@@ -7,14 +7,9 @@ import Toggle from '../Common/Toggle';
 import { api } from '../../services/api';
 import { useRules } from '../../hooks/useRules';
 import { useCategories, useCreateCategory, useUpdateCategory, useDeleteCategory, useResetSystemCategory } from '../../hooks/useCategories';
-import { useProjects } from '../../hooks/useProjects';
-import { useTasks } from '../../hooks/useTasks';
 import { usePluginFrontend } from '../../hooks/usePluginFrontend';
 import { Category } from '../../types';
 import { Check, X, Trash2, Edit2, RotateCcw, Settings as SettingsIcon, Tag, FileText, Info, Folder, CheckSquare, Target } from 'lucide-react';
-import { Projects } from '../Projects';
-import { Tasks } from '../Tasks';
-import { Goals } from '../Goals';
 import { ErrorBoundary } from '../Common/ErrorBoundary';
 import type { PluginSettingsTab } from '../../types/pluginFrontend';
 
@@ -22,7 +17,7 @@ interface SettingsProps {
   onClose?: () => void;
 }
 
-type SettingsTab = 'general' | 'categories' | 'rules' | 'projects' | 'tasks' | 'goals' | 'about' | string;
+type SettingsTab = 'general' | 'categories' | 'rules' | 'about' | string;
 
 const Settings: React.FC<SettingsProps> = () => {
   const { settings, setSettings, categories, pendingRuleData, settingsActiveTab, scrollToIdlePromptThreshold, setPendingRuleData, setSettingsActiveTab, setScrollToIdlePromptThreshold } = useStore();
@@ -33,11 +28,7 @@ const Settings: React.FC<SettingsProps> = () => {
 
   const { rules, isLoading: rulesLoading, createRule, updateRule, deleteRule } = useRules();
   const { data: categoriesData = [] } = useCategories();
-  const { projects } = useProjects(false);
-  const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
-  const [editingProjectId, setEditingProjectId] = useState<number | null>(null);
-  const { tasks } = useTasks(selectedProjectId || undefined, false);
-  const { tasks: editingTasks } = useTasks(editingProjectId || undefined, false);
+  // Projects, Tasks, and Goals are now handled by plugins
   const createCategoryMutation = useCreateCategory();
   const updateCategoryMutation = useUpdateCategory();
   const deleteCategoryMutation = useDeleteCategory();
@@ -293,9 +284,7 @@ const Settings: React.FC<SettingsProps> = () => {
     { id: 'general', label: 'General', icon: SettingsIcon },
     { id: 'categories', label: 'Categories', icon: Tag },
     { id: 'rules', label: 'Rules', icon: FileText },
-    { id: 'projects', label: 'Projects', icon: Folder },
-    { id: 'tasks', label: 'Tasks', icon: CheckSquare },
-    { id: 'goals', label: 'Goals', icon: Target },
+    // Projects, Tasks, and Goals tabs are now provided by plugins
     { id: 'about', label: 'About', icon: Info },
   ];
   
@@ -785,11 +774,7 @@ const Settings: React.FC<SettingsProps> = () => {
                   className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                 >
                   <option value="">None</option>
-                  {projects.filter(p => !p.is_archived).map((proj) => (
-                    <option key={proj.id} value={proj.id}>
-                      {proj.name}
-                    </option>
-                  ))}
+                  {/* Projects are now provided by plugins */}
                 </select>
               </div>
               <div>
@@ -803,11 +788,7 @@ const Settings: React.FC<SettingsProps> = () => {
                   disabled={!newCategory.project_id}
                 >
                   <option value="">None</option>
-                  {newCategory.project_id && tasks?.filter(t => !t.is_archived).map((task) => (
-                    <option key={task.id} value={task.id}>
-                      {task.name}
-                    </option>
-                  ))}
+                  {/* Tasks are now provided by plugins */}
                 </select>
               </div>
               <div>
@@ -967,11 +948,7 @@ const Settings: React.FC<SettingsProps> = () => {
                         className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                       >
                         <option value="">None</option>
-                        {projects.filter(p => !p.is_archived).map((proj) => (
-                          <option key={proj.id} value={proj.id}>
-                            {proj.name}
-                          </option>
-                        ))}
+                        {/* Projects are now provided by plugins */}
                       </select>
                     </div>
                     <div>
@@ -985,11 +962,7 @@ const Settings: React.FC<SettingsProps> = () => {
                         disabled={!editingProjectId && !editingCategory.project_id}
                       >
                         <option value="">None</option>
-                        {(editingProjectId || editingCategory.project_id) && editingTasks?.filter(t => !t.is_archived).map((task) => (
-                          <option key={task.id} value={task.id}>
-                            {task.name}
-                          </option>
-                        ))}
+                        {/* Tasks are now provided by plugins */}
                       </select>
                     </div>
                     <div>
@@ -1730,21 +1703,7 @@ const Settings: React.FC<SettingsProps> = () => {
         {activeTab === 'general' && renderGeneralSettings()}
         {activeTab === 'categories' && renderCategoriesSettings()}
         {activeTab === 'rules' && renderRulesSettings()}
-        {activeTab === 'projects' && (
-          <div className="-m-4 sm:-m-6">
-            <Projects />
-          </div>
-        )}
-        {activeTab === 'tasks' && (
-          <div className="-m-4 sm:-m-6">
-            <Tasks />
-          </div>
-        )}
-        {activeTab === 'goals' && (
-          <div className="-m-4 sm:-m-6">
-            <Goals />
-          </div>
-        )}
+        {/* Projects, Tasks, and Goals tabs are now provided by plugins */}
         {activeTab === 'about' && renderAbout()}
         {/* Plugin settings tabs */}
         {pluginTabs.map((tab: PluginSettingsTab) => {

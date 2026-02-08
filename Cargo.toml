@@ -1,5 +1,5 @@
 [workspace]
-members = ["backend", "plugin-sdk", "plugins/projects-tasks", "plugins/billing", "plugins/pomodoro", "plugins/goals"]
+members = ["backend", "plugin-sdk"]
 resolver = "2"
 
 [workspace.package]

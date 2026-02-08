@@ -175,7 +175,8 @@ impl Database {
                 description TEXT,
                 repository_url TEXT,
                 manifest_path TEXT,
-                is_builtin BOOLEAN DEFAULT FALSE,
+                frontend_entry TEXT,
+                frontend_components TEXT,
                 installed_at INTEGER NOT NULL,
                 enabled BOOLEAN DEFAULT TRUE
             );
@@ -204,134 +205,73 @@ impl Database {
             }
         }
 
-        // Insert default categories if not exist
-        // Regular categories use AUTOINCREMENT (no id specified)
-        // For fresh installs, these will always be inserted since no categories exist yet
-        conn.execute_batch(r#"
-            INSERT OR IGNORE INTO categories (name, color, icon, is_productive, sort_order, is_system, is_pinned) VALUES
-                ('Work', '#4CAF50', '💼', TRUE, 1, FALSE, FALSE),
-                ('Communication', '#2196F3', '💬', TRUE, 2, FALSE, TRUE),
-                ('Meetings', '#9C27B0', '🎥', TRUE, 3, FALSE, TRUE),
-                ('Browser', '#FF9800', '🌐', NULL, 4, FALSE, FALSE),
-                ('Entertainment', '#F44336', '🎮', FALSE, 5, FALSE, FALSE),
-                ('Personal', '#9E9E9E', '🏠', FALSE, 9, FALSE, TRUE);
-        "#)?;
-        
-        // System categories use negative IDs to avoid conflicts with regular categories
-        // Ensure system categories exist - check by name to handle cases where category exists with different ID
-        for (id, name, color, icon, is_productive, sort_order, is_pinned) in [
-            (-1, "Uncategorized", "#9E9E9E", "❓", None::<bool>, 8, false),
-            (-2, "Break", "#795548", "☕", Some(false), 7, true),
-            (-3, "Thinking", "#00BCD4", "🧠", Some(true), 6, true),
-        ] {
-            // Check if category exists by ID
-            let exists_by_id: bool = conn.query_row(
-                "SELECT EXISTS(SELECT 1 FROM categories WHERE id = ?)",
-                params![id],
-                |row| row.get(0),
-            ).unwrap_or(false);
+        // Check if default data has already been initialized
+        let default_data_initialized: bool = conn.query_row(
+            "SELECT CAST(value AS INTEGER) FROM settings WHERE key = 'default_data_initialized'",
+            [],
+            |row| row.get(0),
+        ).unwrap_or(false);
+
+        // Only create default categories and rules on first run
+        if !default_data_initialized {
+            // Insert default categories
+            // Regular categories use AUTOINCREMENT (no id specified)
+            conn.execute_batch(r#"
+                INSERT OR IGNORE INTO categories (name, color, icon, is_productive, sort_order, is_system, is_pinned) VALUES
+                    ('Work', '#4CAF50', '💼', TRUE, 1, FALSE, FALSE),
+                    ('Communication', '#2196F3', '💬', TRUE, 2, FALSE, TRUE),
+                    ('Meetings', '#9C27B0', '🎥', TRUE, 3, FALSE, TRUE),
+                    ('Browser', '#FF9800', '🌐', NULL, 4, FALSE, FALSE),
+                    ('Entertainment', '#F44336', '🎮', FALSE, 5, FALSE, FALSE),
+                    ('Personal', '#9E9E9E', '🏠', FALSE, 9, FALSE, TRUE);
+            "#)?;
             
-            // Check if category exists by name (might have different ID)
-            let existing_id: Option<i64> = conn.query_row(
-                "SELECT id FROM categories WHERE name = ?",
-                params![name],
-                |row| row.get(0),
-            ).ok();
-            
-            if exists_by_id {
-                // Category already exists with correct ID, ensure it has correct system properties
-                // Include name in UPDATE to fix any leftover temp names from failed migrations
-                let _ = conn.execute(
-                    "UPDATE categories SET name = ?, color = ?, icon = ?, is_productive = ?, sort_order = ?, is_system = TRUE, is_pinned = ? WHERE id = ?",
-                    params![name, color, icon, is_productive, sort_order, is_pinned, id],
-                );
-            } else if let Some(existing_id_val) = existing_id {
-                // Category exists with different ID - we need to migrate it to the system ID
-                // Strategy: Create the target category with a temporary unique name first,
-                // update all foreign key references, then delete the old category and rename the new one
+            // System categories use negative IDs to avoid conflicts with regular categories
+            for (id, name, color, icon, is_productive, sort_order, is_pinned) in [
+                (-1, "Uncategorized", "#9E9E9E", "❓", None::<bool>, 8, false),
+                (-2, "Break", "#795548", "☕", Some(false), 7, true),
+                (-3, "Thinking", "#00BCD4", "🧠", Some(true), 6, true),
+            ] {
+                // Check if system category already exists (might exist from migrations)
+                let exists_by_id: bool = conn.query_row(
+                    "SELECT EXISTS(SELECT 1 FROM categories WHERE id = ?)",
+                    params![id],
+                    |row| row.get(0),
+                ).unwrap_or(false);
                 
-                // Step 1: Create the target category with a temporary unique name
-                let temp_name = format!("__TEMP_SYSTEM_{}_{}", id, chrono::Utc::now().timestamp());
-                conn.execute(
-                    "INSERT INTO categories (id, name, color, icon, is_productive, sort_order, is_system, is_pinned) VALUES (?, ?, ?, ?, ?, ?, TRUE, ?)",
-                    params![id, temp_name, color, icon, is_productive, sort_order, is_pinned],
-                )?;
-                
-                // Step 2: Update all foreign key references to point to the new system ID
-                let _ = conn.execute(
-                    "UPDATE activities SET category_id = ? WHERE category_id = ?",
-                    params![id, existing_id_val],
-                );
-                let _ = conn.execute(
-                    "UPDATE manual_entries SET category_id = ? WHERE category_id = ?",
-                    params![id, existing_id_val],
-                );
-                let _ = conn.execute(
-                    "UPDATE rules SET category_id = ? WHERE category_id = ?",
-                    params![id, existing_id_val],
-                );
-                let _ = conn.execute(
-                    "UPDATE goals SET category_id = ? WHERE category_id = ?",
-                    params![id, existing_id_val],
-                );
-                
-                // Step 3: Now delete the old category (should work since all references are updated)
-                conn.execute("DELETE FROM categories WHERE id = ?", params![existing_id_val])?;
-                
-                // Step 4: Update the temp category to have the correct name
-                conn.execute(
-                    "UPDATE categories SET name = ? WHERE id = ?",
-                    params![name, id],
-                )?;
-            } else {
-                // Category doesn't exist, insert it
-                conn.execute(
-                    "INSERT INTO categories (id, name, color, icon, is_productive, sort_order, is_system, is_pinned) VALUES (?, ?, ?, ?, ?, ?, TRUE, ?)",
-                    params![id, name, color, icon, is_productive, sort_order, is_pinned],
-                )?;
+                if !exists_by_id {
+                    // Insert system category only if it doesn't exist
+                    conn.execute(
+                        "INSERT INTO categories (id, name, color, icon, is_productive, sort_order, is_system, is_pinned) VALUES (?, ?, ?, ?, ?, ?, TRUE, ?)",
+                        params![id, name, color, icon, is_productive, sort_order, is_pinned],
+                    )?;
+                }
             }
-        }
 
-        // Insert default rules (only if they don't exist)
-        // Find categories by name and insert rules only if they don't already exist
-        let default_rules = vec![
-            ("app_name", "Code", "Work", 10),
-            ("app_name", "Visual Studio", "Work", 10),
-            ("app_name", "IntelliJ", "Work", 10),
-            ("app_name", "WebStorm", "Work", 10),
-            ("app_name", "PyCharm", "Work", 10),
-            ("app_name", "Slack", "Communication", 10),
-            ("app_name", "Discord", "Communication", 10),
-            ("app_name", "Microsoft Teams", "Communication", 10),
-            ("app_name", "Telegram", "Communication", 10),
-            ("app_name", "Zoom", "Meetings", 10),
-            ("app_name", "Google Meet", "Meetings", 10),
-            ("app_name", "Chrome", "Browser", 5),
-            ("app_name", "Firefox", "Browser", 5),
-            ("app_name", "Safari", "Browser", 5),
-            ("app_name", "Edge", "Browser", 5),
-            ("window_title", "*YouTube*", "Entertainment", 15),
-            ("window_title", "*Netflix*", "Entertainment", 15),
-            ("window_title", "*Twitch*", "Entertainment", 15),
-        ];
+            // Insert default rules
+            let default_rules = vec![
+                ("app_name", "Code", "Work", 10),
+                ("app_name", "Visual Studio", "Work", 10),
+                ("app_name", "IntelliJ", "Work", 10),
+                ("app_name", "WebStorm", "Work", 10),
+                ("app_name", "PyCharm", "Work", 10),
+                ("app_name", "Slack", "Communication", 10),
+                ("app_name", "Discord", "Communication", 10),
+                ("app_name", "Microsoft Teams", "Communication", 10),
+                ("app_name", "Telegram", "Communication", 10),
+                ("app_name", "Zoom", "Meetings", 10),
+                ("app_name", "Google Meet", "Meetings", 10),
+                ("app_name", "Chrome", "Browser", 5),
+                ("app_name", "Firefox", "Browser", 5),
+                ("app_name", "Safari", "Browser", 5),
+                ("app_name", "Edge", "Browser", 5),
+                ("window_title", "*YouTube*", "Entertainment", 15),
+                ("window_title", "*Netflix*", "Entertainment", 15),
+                ("window_title", "*Twitch*", "Entertainment", 15),
+            ];
 
-        for (rule_type, pattern, category_name, priority) in default_rules {
-            // Check if rule already exists
-            let exists: bool = conn.query_row(
-                "SELECT EXISTS(
-                    SELECT 1 FROM rules 
-                    WHERE rule_type = ? AND pattern = ? AND category_id = (
-                        SELECT id FROM categories WHERE name = ?
-                    )
-                )",
-                params![rule_type, pattern, category_name],
-                |row| row.get(0),
-            ).unwrap_or(false);
-
-            if !exists {
+            for (rule_type, pattern, category_name, priority) in default_rules {
                 // Insert rule if category exists
-                // For fresh installs, categories are inserted before rules, so this will always succeed
-                // For existing databases, if category doesn't exist, no row is inserted (which is correct)
                 let _ = conn.execute(
                     "INSERT INTO rules (rule_type, pattern, category_id, priority)
                      SELECT ?, ?, id, ?
@@ -339,6 +279,35 @@ impl Database {
                      WHERE name = ?",
                     params![rule_type, pattern, priority, category_name],
                 );
+            }
+
+            // Mark default data as initialized
+            conn.execute(
+                "INSERT OR REPLACE INTO settings (key, value) VALUES ('default_data_initialized', '1')",
+                [],
+            )?;
+        } else {
+            // For existing databases, ensure system categories exist (but don't overwrite user changes)
+            // Only create them if they don't exist at all
+            for (id, name, color, icon, is_productive, sort_order, is_pinned) in [
+                (-1, "Uncategorized", "#9E9E9E", "❓", None::<bool>, 8, false),
+                (-2, "Break", "#795548", "☕", Some(false), 7, true),
+                (-3, "Thinking", "#00BCD4", "🧠", Some(true), 6, true),
+            ] {
+                // Check if system category exists by ID
+                let exists_by_id: bool = conn.query_row(
+                    "SELECT EXISTS(SELECT 1 FROM categories WHERE id = ?)",
+                    params![id],
+                    |row| row.get(0),
+                ).unwrap_or(false);
+                
+                if !exists_by_id {
+                    // Only create if it doesn't exist - don't overwrite user changes
+                    let _ = conn.execute(
+                        "INSERT INTO categories (id, name, color, icon, is_productive, sort_order, is_system, is_pinned) VALUES (?, ?, ?, ?, ?, ?, TRUE, ?)",
+                        params![id, name, color, icon, is_productive, sort_order, is_pinned],
+                    );
+                }
             }
         }
 
@@ -370,7 +339,8 @@ impl Database {
         if version < 10 { self.migrate_v10(conn)?; }
         if version < 11 { self.migrate_v11(conn)?; }
         if version < 12 { self.migrate_v12(conn)?; }
-        if version < 13 { self.migrate_v13(conn)?; }
+        // v13, v14, v15 merged into v12 - migrate_v12 handles all of them and sets version to 15
+        // For databases that already have v12-v14, migrate_v12 will update them to v15
 
         Ok(())
     }
@@ -393,34 +363,96 @@ impl Database {
         Ok(())
     }
 
-    fn migrate_v12(&self, conn: &Connection) -> Result<()> {
-        let tx = conn.unchecked_transaction()?;
-        tx.execute_batch(r#"
-            CREATE TABLE IF NOT EXISTS installed_plugins (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                version TEXT NOT NULL,
-                description TEXT,
-                is_builtin BOOLEAN DEFAULT FALSE,
-                installed_at INTEGER NOT NULL,
-                enabled BOOLEAN DEFAULT TRUE
-            );
-        "#)?;
-        tx.execute(
-            "INSERT OR REPLACE INTO settings (key, value) VALUES ('schema_version', '12')",
-            [],
-        )?;
-        tx.commit()?;
-        Ok(())
+    /// Check if a column exists in a table
+    fn column_exists(conn: &Connection, table: &str, column: &str) -> bool {
+        let query = format!("PRAGMA table_info({})", table);
+        let mut stmt = match conn.prepare(&query) {
+            Ok(s) => s,
+            Err(_) => return false,
+        };
+        let rows = match stmt.query_map([], |row| {
+            Ok(row.get::<_, String>(1)?)
+        }) {
+            Ok(r) => r,
+            Err(_) => return false,
+        };
+        for row in rows {
+            if let Ok(col_name) = row {
+                if col_name == column {
+                    return true;
+                }
+            }
+        }
+        false
     }
 
-    fn migrate_v13(&self, conn: &Connection) -> Result<()> {
+    fn migrate_v12(&self, conn: &Connection) -> Result<()> {
         let tx = conn.unchecked_transaction()?;
-        // Add repository_url and manifest_path columns to installed_plugins table
-        let _ = tx.execute("ALTER TABLE installed_plugins ADD COLUMN repository_url TEXT", []);
-        let _ = tx.execute("ALTER TABLE installed_plugins ADD COLUMN manifest_path TEXT", []);
+        
+        // Check if table exists
+        let table_exists: bool = tx.query_row(
+            "SELECT EXISTS(SELECT name FROM sqlite_master WHERE type='table' AND name='installed_plugins')",
+            [],
+            |row| row.get(0),
+        ).unwrap_or(false);
+        
+        if !table_exists {
+            // Create table with full structure for new installations
+            tx.execute_batch(r#"
+                CREATE TABLE installed_plugins (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    version TEXT NOT NULL,
+                    description TEXT,
+                    repository_url TEXT,
+                    manifest_path TEXT,
+                    frontend_entry TEXT,
+                    frontend_components TEXT,
+                    installed_at INTEGER NOT NULL,
+                    enabled BOOLEAN DEFAULT TRUE
+                );
+            "#)?;
+        } else {
+            // Table exists - migrate from old structure to new
+            // Step 1: Remove is_builtin column if it exists (v14 migration logic)
+            if Self::column_exists(conn, "installed_plugins", "is_builtin") {
+                // Recreate table without is_builtin column
+                tx.execute_batch(r#"
+                    CREATE TABLE installed_plugins_new (
+                        id TEXT PRIMARY KEY,
+                        name TEXT NOT NULL,
+                        version TEXT NOT NULL,
+                        description TEXT,
+                        repository_url TEXT,
+                        manifest_path TEXT,
+                        installed_at INTEGER NOT NULL,
+                        enabled BOOLEAN DEFAULT TRUE
+                    );
+                    INSERT INTO installed_plugins_new (id, name, version, description, repository_url, manifest_path, installed_at, enabled)
+                    SELECT id, name, version, description, repository_url, manifest_path, installed_at, enabled
+                    FROM installed_plugins;
+                    DROP TABLE installed_plugins;
+                    ALTER TABLE installed_plugins_new RENAME TO installed_plugins;
+                "#)?;
+            }
+            
+            // Step 2: Add missing columns if they don't exist (v13, v15 migration logic)
+            if !Self::column_exists(conn, "installed_plugins", "repository_url") {
+                let _ = tx.execute("ALTER TABLE installed_plugins ADD COLUMN repository_url TEXT", []);
+            }
+            if !Self::column_exists(conn, "installed_plugins", "manifest_path") {
+                let _ = tx.execute("ALTER TABLE installed_plugins ADD COLUMN manifest_path TEXT", []);
+            }
+            if !Self::column_exists(conn, "installed_plugins", "frontend_entry") {
+                let _ = tx.execute("ALTER TABLE installed_plugins ADD COLUMN frontend_entry TEXT", []);
+            }
+            if !Self::column_exists(conn, "installed_plugins", "frontend_components") {
+                let _ = tx.execute("ALTER TABLE installed_plugins ADD COLUMN frontend_components TEXT", []);
+            }
+        }
+        
         tx.execute(
-            "INSERT OR REPLACE INTO settings (key, value) VALUES ('schema_version', '13')",
+            "INSERT OR REPLACE INTO settings (key, value) VALUES ('schema_version', '15')",
             [],
         )?;
         tx.commit()?;
@@ -2912,7 +2944,6 @@ impl Database {
         name: &str,
         version: &str,
         description: Option<&str>,
-        is_builtin: bool,
     ) -> Result<(), String> {
         self.install_plugin_with_repo(
             plugin_id,
@@ -2921,7 +2952,8 @@ impl Database {
             description,
             None,
             None,
-            is_builtin,
+            None,
+            None,
         )
     }
 
@@ -2934,14 +2966,15 @@ impl Database {
         description: Option<&str>,
         repository_url: Option<&str>,
         manifest_path: Option<&str>,
-        is_builtin: bool,
+        frontend_entry: Option<&str>,
+        frontend_components: Option<&str>,
     ) -> Result<(), String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         let installed_at = chrono::Utc::now().timestamp();
         
         conn.execute(
-            "INSERT OR REPLACE INTO installed_plugins (id, name, version, description, repository_url, manifest_path, is_builtin, installed_at, enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            params![plugin_id, name, version, description, repository_url, manifest_path, is_builtin, installed_at, true],
+            "INSERT OR REPLACE INTO installed_plugins (id, name, version, description, repository_url, manifest_path, frontend_entry, frontend_components, installed_at, enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            params![plugin_id, name, version, description, repository_url, manifest_path, frontend_entry, frontend_components, installed_at, true],
         )
         .map_err(|e| format!("Failed to install plugin: {}", e))?;
         
@@ -2973,10 +3006,10 @@ impl Database {
     }
 
     /// Get all installed plugins
-    pub fn get_installed_plugins(&self) -> Result<Vec<(String, String, String, Option<String>, Option<String>, Option<String>, bool, bool)>, String> {
+    pub fn get_installed_plugins(&self) -> Result<Vec<(String, String, String, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, bool)>, String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         let mut stmt = conn
-            .prepare("SELECT id, name, version, description, repository_url, manifest_path, is_builtin, enabled FROM installed_plugins")
+            .prepare("SELECT id, name, version, description, repository_url, manifest_path, frontend_entry, frontend_components, enabled FROM installed_plugins")
             .map_err(|e| format!("Failed to prepare query: {}", e))?;
         
         let plugins = stmt
@@ -2988,8 +3021,9 @@ impl Database {
                     row.get::<_, Option<String>>(3)?,
                     row.get::<_, Option<String>>(4)?,
                     row.get::<_, Option<String>>(5)?,
-                    row.get::<_, bool>(6)?,
-                    row.get::<_, bool>(7)?,
+                    row.get::<_, Option<String>>(6)?,
+                    row.get::<_, Option<String>>(7)?,
+                    row.get::<_, bool>(8)?,
                 ))
             })
             .map_err(|e| format!("Failed to query plugins: {}", e))?

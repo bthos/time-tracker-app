@@ -8,7 +8,6 @@ import Layout from './components/Layout/Layout';
 import Dashboard from './components/Dashboard/Dashboard';
 import History from './components/History/History';
 import { Reports } from './components/Reports';
-import { Pomodoro } from './components/Pomodoro';
 import Settings from './components/Settings/Settings';
 import { Marketplace } from './components/Marketplace';
 import IdlePrompt from './components/IdlePrompt/IdlePrompt';
@@ -17,7 +16,7 @@ import { listen } from '@tauri-apps/api/event';
 import type { ManualEntry } from './types';
 import type { PluginRoute } from './types/pluginFrontend';
 
-const VALID_VIEWS: View[] = ['dashboard', 'history', 'reports', 'settings', 'pomodoro', 'marketplace'];
+const VALID_VIEWS: View[] = ['dashboard', 'history', 'reports', 'settings', 'marketplace'];
 
 function App() {
   const [currentView, setCurrentView] = useState<View>('dashboard');
@@ -263,8 +262,6 @@ function App() {
         />;
       case 'reports':
         return <Reports />;
-      case 'pomodoro':
-        return <Pomodoro />;
       case 'settings':
         return <Settings />;
       case 'marketplace':

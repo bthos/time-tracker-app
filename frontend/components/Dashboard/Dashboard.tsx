@@ -1,6 +1,5 @@
 import { useMemo } from 'react';
-import { useDailyStats, useStatsForRange, useCategories, useTrackerStatus, useActivities, useProjects, useTasks } from '../../hooks';
-import { useFocusSessions } from '../../hooks/useFocusSessions';
+import { useDailyStats, useStatsForRange, useCategories, useTrackerStatus, useActivities } from '../../hooks';
 import { useStore } from '../../store';
 import { usePluginFrontend } from '../../hooks/usePluginFrontend';
 import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
@@ -10,13 +9,7 @@ import TopApps from './TopApps';
 import Timeline from '../Timeline/Timeline';
 import Insights from './Insights';
 import DailyTrend from './DailyTrend';
-import PomodoroWidget from './PomodoroWidget';
-import GoalAlerts from '../Goals/GoalAlerts';
-import BillableWidget from './BillableWidget';
-import ProjectBreakdown from './ProjectBreakdown';
 import TopWebsites from './TopWebsites';
-import GoalProgressWidget from './GoalProgressWidget';
-import ActiveProjectSelector from './ActiveProjectSelector';
 import LoadingSpinner from '../Common/LoadingSpinner';
 import { ErrorBoundary } from '../Common/ErrorBoundary';
 import type { TimelineBlock, CategoryStats, AppStats, Category } from '../../types';
@@ -93,13 +86,6 @@ export default function Dashboard() {
   const { data: rangeStats, isLoading: rangeStatsLoading, error: rangeStatsError } = useStatsForRange(dateRange);
   const { data: activities, isLoading: activitiesLoading, error: activitiesError } = useActivities();
 
-  // Get projects and tasks for timeline enrichment (must be before early returns)
-  const { projects } = useProjects(false);
-  const { tasks: allTasks } = useTasks(undefined, false);
-  
-  // Get focus sessions for pomodoro timeline
-  const { sessions: focusSessions } = useFocusSessions(dateRange);
-
   // Build displayStats from API only (single-day: get_daily_stats; multi-day: get_stats)
   const displayStats = useMemo((): { total_duration_sec: number; productive_duration_sec: number; categories: CategoryStats[]; top_apps: AppStats[] } => {
     const empty: { total_duration_sec: number; productive_duration_sec: number; categories: CategoryStats[]; top_apps: AppStats[] } = {
@@ -160,7 +146,7 @@ export default function Dashboard() {
     return appsWithoutCategory.size;
   }, [activities]);
 
-  // Build timeline from activities with project/task/billable info
+  // Build timeline from activities with category info
   const timelineBlocks: TimelineBlock[] = useMemo(() => {
     if (!activities || !categories) return [];
     
@@ -170,28 +156,9 @@ export default function Dashboard() {
         ? categories.find(c => c.id === activity.category_id) || null
         : null;
       
-      // Find project for this activity
-      const project = activity.project_id
-        ? projects.find(p => p.id === activity.project_id) || null
-        : null;
-      
-      // Find task for this activity
-      const task = activity.task_id
-        ? allTasks.find(t => t.id === activity.task_id) || null
-        : null;
-      
-      // Calculate billable status
-      // TODO: Refactor billable logic - currently project billable takes precedence over category billable.
-      // Consider:
-      // - Should this be OR logic (billable if either project OR category is billable)?
-      // - Should this be AND logic (billable only if both are billable)?
-      // - Should project always override category, or should category override project in some cases?
-      // - Should we create a utility function to calculate billable status consistently across the app?
-      // See also: database.rs get_billable_hours and get_billable_revenue methods
+      // Calculate billable status from category
       let is_billable = false;
-      if (project?.is_billable) {
-        is_billable = true;
-      } else if (category?.is_billable === true) {
+      if (category?.is_billable === true) {
         is_billable = true;
       }
       
@@ -201,14 +168,14 @@ export default function Dashboard() {
         app_name: activity.app_name,
         domain: activity.domain,
         category: category,
-        project: project,
-        task: task,
+        project: null, // Projects are now handled by plugins
+        task: null, // Tasks are now handled by plugins
         is_idle: activity.is_idle,
         is_manual: false,
         is_billable: is_billable,
       };
     });
-  }, [activities, categories, projects, allTasks]);
+  }, [activities, categories]);
 
 
   // Show loading only if we're loading stats (for current range type) and activities, and have no data yet
@@ -271,28 +238,6 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* Active Project Selector and Pomodoro Widget Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-        <ErrorBoundary>
-          <ActiveProjectSelector />
-        </ErrorBoundary>
-        <PomodoroWidget />
-      </div>
-
-      {/* Goal Alerts */}
-      <ErrorBoundary>
-        <GoalAlerts maxAlerts={3} />
-      </ErrorBoundary>
-
-      {/* Billable Time and Goal Progress Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-        <ErrorBoundary>
-          <BillableWidget />
-        </ErrorBoundary>
-        <ErrorBoundary>
-          <GoalProgressWidget />
-        </ErrorBoundary>
-      </div>
 
       {/* Plugin Dashboard Widgets */}
       {pluginWidgets.length > 0 && (
@@ -317,11 +262,8 @@ export default function Dashboard() {
         <TopApps apps={displayStats.top_apps || []} totalDuration={displayStats.total_duration_sec} />
       </div>
 
-      {/* Project Breakdown and Top Websites Row */}
+      {/* Top Websites Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-        <ErrorBoundary>
-          <ProjectBreakdown />
-        </ErrorBoundary>
         <ErrorBoundary>
           <TopWebsites />
         </ErrorBoundary>
@@ -333,7 +275,7 @@ export default function Dashboard() {
       </ErrorBoundary>
 
       {/* Timeline */}
-      {timelineBlocks.length > 0 && <Timeline blocks={timelineBlocks} focusSessions={focusSessions} />}
+      {timelineBlocks.length > 0 && <Timeline blocks={timelineBlocks} focusSessions={[]} />}
       {timelineBlocks.length === 0 && (
         <div className="text-center py-8 text-gray-500 dark:text-gray-400">
           No activity data available for the selected period

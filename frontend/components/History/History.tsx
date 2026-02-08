@@ -3,7 +3,8 @@ import { useStore } from '../../store';
 import { Activity, ManualEntry, FocusSession } from '../../types';
 import { formatDuration, formatTime, formatDate } from '../../utils/format';
 import Button from '../Common/Button';
-import { useActivities, useManualEntries, useDeleteActivity, useDeleteManualEntry, useFocusSessions, useDeleteFocusSession, useProjects, useTasks } from '../../hooks';
+import { useActivities, useManualEntries, useDeleteActivity, useDeleteManualEntry } from '../../hooks';
+// Focus Sessions, Projects, and Tasks are now provided by plugins
 import { useTrackerStatus } from '../../hooks/useTracker';
 import { SkeletonLoader } from '../Common/SkeletonLoader';
 import { Edit2, Trash2, Inbox, Calendar, Briefcase, Coffee, CheckCircle2, XCircle, Clock, Play, Filter, Tag } from 'lucide-react';
@@ -92,9 +93,12 @@ const History: React.FC<HistoryProps> = ({
     }
   }, [dateRangePreset, customStartTimestamp, customEndTimestamp]);
   
-  const { sessions: focusSessions, loading: focusSessionsLoading, refetch: refetchFocusSessions } = useFocusSessions(dateRange);
-  const { projects } = useProjects();
-  const { tasks: allTasks } = useTasks(undefined, false);
+  // Focus Sessions, Projects, and Tasks are now provided by plugins
+  const focusSessions: FocusSession[] = [];
+  const focusSessionsLoading = false;
+  const refetchFocusSessions = () => {};
+  const projects: any[] = [];
+  const allTasks: any[] = [];
   const { data: trackerStatus } = useTrackerStatus();
   
   // Update current time every second for real-time updates

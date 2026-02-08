@@ -1,10 +1,12 @@
 import { X, Download, CheckCircle2, ExternalLink, Code, User, Calendar } from 'lucide-react';
 import type { RegistryPlugin } from '../../types/plugin';
 import Button from '../Common/Button';
+import LoadingSpinner from '../Common/LoadingSpinner';
 
 interface PluginDetailsProps {
   plugin: RegistryPlugin;
   isInstalled?: boolean;
+  isInstalling?: boolean;
   onClose: () => void;
   onInstall?: (plugin: RegistryPlugin) => void;
 }
@@ -111,10 +113,20 @@ export default function PluginDetails({ plugin, isInstalled, onClose, onInstall 
             {onInstall && !isInstalled && (
               <Button
                 onClick={() => onInstall(plugin)}
+                disabled={isInstalling}
                 className="flex-1 flex items-center justify-center gap-2"
               >
-                <Download className="w-4 h-4" />
-                Install Plugin
+                {isInstalling ? (
+                  <>
+                    <LoadingSpinner size="sm" className="text-white" />
+                    <span>Installing...</span>
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4" />
+                    Install Plugin
+                  </>
+                )}
               </Button>
             )}
             {isInstalled && (

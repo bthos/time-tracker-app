@@ -2,9 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useActivities } from '../../hooks/useActivities';
 import { useCategories } from '../../hooks/useCategories';
-import { useProjects } from '../../hooks/useProjects';
-import { useTasks } from '../../hooks/useTasks';
-import { useFocusSessions } from '../../hooks/useFocusSessions';
+// Projects, Tasks, and Focus Sessions are now provided by plugins
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from 'recharts';
 import { formatDuration } from '../../utils/format';
 import { exportData } from '../../utils/export';
@@ -22,14 +20,12 @@ export const Reports: React.FC = () => {
   
   const { data: activities = [], isLoading: activitiesLoading } = useActivities();
   const { data: categories = [], isLoading: categoriesLoading } = useCategories();
-  const { projects = [], loading: projectsLoading } = useProjects(false);
-  const { tasks: allTasks = [], loading: tasksLoading } = useTasks(selectedProjectId || undefined, false);
+  // Projects, Tasks, and Focus Sessions are now provided by plugins
+  const projects: any[] = [];
+  const allTasks: any[] = [];
+  const focusSessions: any[] = [];
   
-  // Get date range for focus sessions
-  const dateRange = useMemo(() => presetToDateRange(period, new Date()), [period]);
-  const { sessions: focusSessions = [], loading: focusSessionsLoading } = useFocusSessions(dateRange);
-  
-  const isLoading = activitiesLoading || categoriesLoading || projectsLoading || tasksLoading || focusSessionsLoading;
+  const isLoading = activitiesLoading || categoriesLoading;
   
   // Calculate Pomodoro statistics
   const pomodoroStats = useMemo(() => {

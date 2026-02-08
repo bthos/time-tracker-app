@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useCategories, useCreateCategory, useUpdateCategory, useDeleteCategory } from '../../hooks/useCategories';
-import { useProjects } from '../../hooks/useProjects';
-import { useTasks } from '../../hooks/useTasks';
+// Projects and Tasks are now provided by plugins
 import Card from '../Common/Card';
 import Button from '../Common/Button';
 import { Category } from '../../types';
@@ -9,14 +8,15 @@ import { Plus, Check, X, Edit2, Trash2, Tag } from 'lucide-react';
 
 export const Categories: React.FC = () => {
   const { data: categories = [], isLoading } = useCategories();
-  const { projects } = useProjects(false);
+  // Projects and Tasks are now provided by plugins
+  const projects: any[] = [];
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
   const [editingProjectId, setEditingProjectId] = useState<number | null>(null);
   const [editingCategoryProjectId, setEditingCategoryProjectId] = useState<number | null>(null);
-  const { tasks } = useTasks(selectedProjectId || undefined, false);
+  const tasks: any[] = [];
   // For editing, use editingProjectId if set, otherwise use the category's project_id
   const effectiveEditingProjectId = editingProjectId !== null ? editingProjectId : editingCategoryProjectId;
-  const { tasks: editingTasks } = useTasks(effectiveEditingProjectId || undefined, false);
+  const editingTasks: any[] = [];
   const createCategoryMutation = useCreateCategory();
   const updateCategoryMutation = useUpdateCategory();
   const deleteCategoryMutation = useDeleteCategory();

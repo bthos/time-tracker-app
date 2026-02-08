@@ -1,15 +1,17 @@
 import { Package, Download, CheckCircle2, XCircle, Star } from 'lucide-react';
 import type { RegistryPlugin } from '../../types/plugin';
 import Button from '../Common/Button';
+import LoadingSpinner from '../Common/LoadingSpinner';
 
 interface PluginCardProps {
   plugin: RegistryPlugin;
   isInstalled?: boolean;
+  isInstalling?: boolean;
   onInstall?: (plugin: RegistryPlugin) => void;
   onViewDetails?: (plugin: RegistryPlugin) => void;
 }
 
-export default function PluginCard({ plugin, isInstalled, onInstall, onViewDetails }: PluginCardProps) {
+export default function PluginCard({ plugin, isInstalled, isInstalling = false, onInstall, onViewDetails }: PluginCardProps) {
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 hover:shadow-lg transition-shadow">
       <div className="flex items-start justify-between mb-4">
@@ -79,9 +81,17 @@ export default function PluginCard({ plugin, isInstalled, onInstall, onViewDetai
         {onInstall && !isInstalled && (
           <Button
             onClick={() => onInstall(plugin)}
-            className="flex-1"
+            disabled={isInstalling}
+            className="flex-1 flex items-center justify-center gap-2"
           >
-            Install
+            {isInstalling ? (
+              <>
+                <LoadingSpinner size="sm" className="text-white" />
+                <span>Installing...</span>
+              </>
+            ) : (
+              'Install'
+            )}
           </Button>
         )}
       </div>

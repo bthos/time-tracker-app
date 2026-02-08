@@ -51,7 +51,6 @@ export interface InstalledPlugin {
   description?: string;
   repository_url?: string;
   manifest_path?: string;
-  is_builtin: boolean;
   enabled: boolean;
   frontend_entry?: string;
   frontend_components?: string[];

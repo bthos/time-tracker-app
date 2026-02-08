@@ -9,7 +9,6 @@ pub struct PluginInfo {
     pub name: String,
     pub version: String,
     pub description: Option<String>,
-    pub is_builtin: bool,
 }
 
 /// Plugin trait that all plugins must implement

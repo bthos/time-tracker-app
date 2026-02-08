@@ -154,9 +154,7 @@ impl PluginLoader {
         if manifest.plugin.version.is_empty() {
             return Err("Plugin version is required".to_string());
         }
-        if manifest.plugin.repository.is_empty() {
-            return Err("Plugin repository is required".to_string());
-        }
+        // Repository is optional - can be filled automatically when installing from GitHub
 
         // Check backend section if present
         if let Some(backend) = &manifest.backend {
@@ -200,6 +198,58 @@ impl PluginLoader {
         }
     }
 
+    /// Find library file in plugin directory
+    /// 
+    /// Search strategy:
+    /// 1. Try library_name from manifest (e.g., "pomodoro-plugin-windows-x86_64.dll")
+    /// 2. Search for any library file with platform-specific extension (.dll/.dylib/.so)
+    /// 3. Fallback to old naming convention ({plugin_id}.dll)
+    /// 
+    /// For plugin developers:
+    /// - Recommended: Set `library_name` in plugin.toml to match your actual library filename
+    ///   Example: `library_name = "pomodoro-plugin-windows-x86_64.dll"`
+    /// - Alternative: Use any filename with correct extension - system will find it automatically
+    fn find_library_file(&self, plugin_dir: &Path, library_name: Option<&str>) -> Result<PathBuf, String> {
+        use std::ffi::OsStr;
+        
+        // Try library_name from manifest first if provided
+        if let Some(lib_name) = library_name {
+            let lib_path = plugin_dir.join(lib_name);
+            if lib_path.exists() {
+                return Ok(lib_path);
+            }
+        }
+        
+        // Try to find library file by pattern (any file with platform-specific extension)
+        let extensions = if cfg!(target_os = "windows") {
+            vec!["dll"]
+        } else if cfg!(target_os = "macos") {
+            vec!["dylib"]
+        } else {
+            vec!["so"]
+        };
+        
+        // Read directory and find library files
+        let entries = fs::read_dir(plugin_dir)
+            .map_err(|e| format!("Failed to read plugin directory: {}", e))?;
+        
+        for entry in entries {
+            let entry = entry.map_err(|e| format!("Failed to read directory entry: {}", e))?;
+            let path = entry.path();
+            
+            if path.is_file() {
+                if let Some(ext) = path.extension().and_then(OsStr::to_str) {
+                    if extensions.contains(&ext) {
+                        // Found a library file - return it
+                        return Ok(path);
+                    }
+                }
+            }
+        }
+        
+        Err("No library file found in plugin directory".to_string())
+    }
+
     /// Load a plugin dynamically from its installed directory
     /// Returns the loaded plugin instance ready for initialization
     pub fn load_dynamic_plugin(
@@ -211,20 +261,40 @@ impl PluginLoader {
         
         let plugin_dir = self.get_plugin_dir(plugin_id);
         
-        // Determine library filename based on platform
-        let lib_name = if cfg!(target_os = "windows") {
-            format!("{}.dll", plugin_id.replace("-", "_"))
-        } else if cfg!(target_os = "macos") {
-            format!("lib{}.dylib", plugin_id.replace("-", "_"))
+        // Try to load manifest to get library_name
+        let manifest_path = plugin_dir.join("plugin.toml");
+        let library_name_opt = if manifest_path.exists() {
+            match self.load_manifest(&manifest_path) {
+                Ok(manifest) => {
+                    manifest.backend.as_ref()
+                        .map(|b| b.library_name.clone())
+                }
+                Err(_) => None,
+            }
         } else {
-            format!("lib{}.so", plugin_id.replace("-", "_"))
+            None
         };
         
-        let lib_path = plugin_dir.join(&lib_name);
-        
-        if !lib_path.exists() {
-            return Err(format!("Plugin library not found: {}", lib_path.display()));
-        }
+        // Find library file (try library_name first, then search by pattern)
+        let lib_path = match self.find_library_file(&plugin_dir, library_name_opt.as_deref()) {
+            Ok(path) => path,
+            Err(_) => {
+                // Fallback to old logic if no library found
+                let lib_name = if cfg!(target_os = "windows") {
+                    format!("{}.dll", plugin_id.replace("-", "_"))
+                } else if cfg!(target_os = "macos") {
+                    format!("lib{}.dylib", plugin_id.replace("-", "_"))
+                } else {
+                    format!("lib{}.so", plugin_id.replace("-", "_"))
+                };
+                let fallback_path = plugin_dir.join(&lib_name);
+                if fallback_path.exists() {
+                    fallback_path
+                } else {
+                    return Err(format!("Plugin library not found in: {}", plugin_dir.display()));
+                }
+            }
+        };
         
         // Load the library
         unsafe {
@@ -270,12 +340,7 @@ impl PluginLoader {
         let installed_plugins = db.get_installed_plugins()
             .map_err(|e| format!("Failed to get installed plugins: {}", e))?;
         
-        for (plugin_id, _name, _version, _description, _repo_url, _manifest_path, is_builtin, enabled) in installed_plugins {
-            // Skip built-in plugins (they're loaded statically)
-            if is_builtin {
-                continue;
-            }
-            
+        for (plugin_id, _name, _version, _description, _repo_url, _manifest_path, _frontend_entry, _frontend_components, enabled) in installed_plugins {
             // Skip disabled plugins
             if !enabled {
                 continue;

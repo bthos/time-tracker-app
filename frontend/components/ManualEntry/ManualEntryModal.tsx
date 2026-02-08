@@ -3,8 +3,6 @@ import { X, Check } from 'lucide-react';
 import { format, subHours } from 'date-fns';
 import { useCreateManualEntry, useUpdateManualEntry } from '../../hooks';
 import { useStore } from '../../store';
-import { useProjects } from '../../hooks/useProjects';
-import { useTasks } from '../../hooks/useTasks';
 import { usePinnedCategories } from '../../hooks/useCategories';
 import type { ManualEntry } from '../../types';
 import Button from '../Common/Button';
@@ -23,7 +21,7 @@ interface ManualEntryModalProps {
 export default function ManualEntryModal({ editEntry, onClose }: ManualEntryModalProps) {
   const { categories } = useStore();
   const { data: pinnedCategories = [] } = usePinnedCategories();
-  const { projects = [] } = useProjects();
+  // Projects and tasks are now handled by plugins
   const createEntry = useCreateManualEntry();
   const updateEntry = useUpdateManualEntry();
 
@@ -33,7 +31,6 @@ export default function ManualEntryModal({ editEntry, onClose }: ManualEntryModa
   const [description, setDescription] = useState(editEntry?.description || '');
   const [categoryId, setCategoryId] = useState<number | null>(editEntry?.category_id ?? null);
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(editEntry?.project_id ?? null);
-  const { tasks = [] } = useTasks(selectedProjectId ?? undefined);
   const [taskId, setTaskId] = useState<number | null>(editEntry?.task_id ?? null);
   const [startDate, setStartDate] = useState(
     editEntry 
@@ -223,26 +220,7 @@ export default function ManualEntryModal({ editEntry, onClose }: ManualEntryModa
             </select>
           </div>
 
-          {/* Task */}
-          {selectedProjectId && tasks.length > 0 && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Task (optional)
-              </label>
-              <select
-                value={taskId || ''}
-                onChange={(e) => setTaskId(e.target.value ? Number(e.target.value) : null)}
-                className="input"
-              >
-                <option value="">Select task...</option>
-                {tasks.map((task: { id: number; name: string }) => (
-                  <option key={task.id} value={task.id}>
-                    {task.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          {/* Task - Tasks are now provided by plugins */}
 
           {/* Description */}
           <div>

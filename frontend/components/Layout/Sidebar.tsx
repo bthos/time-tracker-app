@@ -10,8 +10,7 @@ import {
 import { useStore } from '../../store';
 import { formatDuration } from '../../utils';
 import { useTodayTotal } from '../../hooks';
-import { usePomodoro } from '../../hooks/usePomodoro';
-import { formatTimerTime } from '../../utils/format';
+// Pomodoro functionality is now provided by plugins
 import { useSettings } from '../../hooks/useSettings';
 import { usePluginFrontend } from '../../hooks/usePluginFrontend';
 
@@ -25,7 +24,7 @@ const coreNavItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'history', label: 'History', icon: History },
   { id: 'reports', label: 'Reports', icon: FileText },
-  { id: 'pomodoro', label: 'Pomodoro', icon: Timer },
+  // Pomodoro is now provided by plugins
   { id: 'marketplace', label: 'Marketplace', icon: Package },
   { id: 'settings', label: 'Settings', icon: Settings },
 ] as const;
@@ -34,7 +33,7 @@ export default function Sidebar({ currentView, onNavigate, onClose }: SidebarPro
   const isTrackingPaused = useStore((state) => state.isTrackingPaused);
   const isThinkingMode = useStore((state) => state.isThinkingMode);
   const { data: todayTotal = 0, isLoading: isLoadingTodayTotal } = useTodayTotal();
-  const { status: pomodoroStatus, pausePomodoro, resumePomodoro } = usePomodoro();
+  // Pomodoro functionality is now provided by plugins
   // Use settings from store for immediate updates, fallback to useSettings query
   const storeSettings = useStore((state) => state.settings);
   const { settings: querySettings } = useSettings();
@@ -45,7 +44,7 @@ export default function Sidebar({ currentView, onNavigate, onClose }: SidebarPro
   const navItems = [
     ...coreNavItems.map(item => ({
       ...item,
-      order: item.id === 'dashboard' ? 0 : item.id === 'history' ? 1 : item.id === 'reports' ? 2 : item.id === 'pomodoro' ? 3 : item.id === 'marketplace' ? 4 : 5,
+      order: item.id === 'dashboard' ? 0 : item.id === 'history' ? 1 : item.id === 'reports' ? 2 : item.id === 'marketplace' ? 4 : 5,
     })),
     ...pluginSidebarItems.map(item => ({
       id: item.route,
@@ -111,7 +110,8 @@ export default function Sidebar({ currentView, onNavigate, onClose }: SidebarPro
           }).map((item) => {
             const Icon = item.icon;
             const isActive = currentView === item.id;
-            const isPomodoroItem = item.id === 'pomodoro';
+            // Pomodoro timer display is now provided by plugins
+            const isPomodoroItem = false;
 
             return (
               <li key={item.id}>
@@ -139,32 +139,7 @@ export default function Sidebar({ currentView, onNavigate, onClose }: SidebarPro
                     </span>
                   </div>
                   
-                  {/* Правая часть - таймер с управлением (только для больших экранов) */}
-                  {isPomodoroItem && pomodoroStatus.is_running && (
-                    <div
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (pomodoroStatus.is_active) {
-                          pausePomodoro();
-                        } else {
-                          resumePomodoro();
-                        }
-                      }}
-                      className={`hidden lg:flex items-center gap-1 px-2 py-0.5 ml-2 rounded-md transition-all duration-200 flex-shrink-0 text-white shadow-sm hover:shadow-md cursor-pointer ${
-                        pomodoroStatus.pomodoro_type === 'work'
-                          ? 'bg-red-500 hover:bg-red-600'
-                          : 'bg-green-500 hover:bg-green-600'
-                      }`}
-                      title={`${pomodoroStatus.pomodoro_type === 'work' ? 'Work' : 'Break'} session - ${pomodoroStatus.is_active ? 'Click to pause' : 'Click to resume'}`}
-                    >
-                      <span className="font-medium text-xs font-mono">
-                        {formatTimerTime(pomodoroStatus.remaining_sec)}
-                      </span>
-                      {pomodoroStatus.is_active && (
-                        <span className="w-1 h-1 bg-white rounded-full animate-pulse"></span>
-                      )}
-                    </div>
-                  )}
+                  {/* Pomodoro timer display is now provided by plugins */}
                 </button>
               </li>
             );

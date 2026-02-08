@@ -51,7 +51,8 @@ pub struct PluginManifestSection {
     pub version: String,
     pub author: String,
     pub description: String,
-    pub repository: String,
+    #[serde(default)]
+    pub repository: Option<String>,
     pub license: Option<String>,
     #[serde(rename = "api_version")]
     pub api_version: Option<String>,
@@ -209,8 +210,13 @@ impl PluginDiscovery {
             .map_err(|e| format!("Failed to read manifest: {}", e))?;
 
         // Parse TOML
-        let manifest: PluginManifest = toml::from_str(&content)
+        let mut manifest: PluginManifest = toml::from_str(&content)
             .map_err(|e| format!("Failed to parse manifest: {}", e))?;
+
+        // Fill repository field if missing (use the GitHub URL)
+        if manifest.plugin.repository.is_none() {
+            manifest.plugin.repository = Some(repository_url.to_string());
+        }
 
         Ok(manifest)
     }

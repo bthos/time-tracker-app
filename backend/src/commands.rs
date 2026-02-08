@@ -1,6 +1,6 @@
 //! Tauri commands - IPC handlers for frontend communication
 
-use crate::database::{Activity, Category, Database, ManualEntry, Rule, Project, Task, FocusSession, Goal, GoalProgress, GoalAlert, DomainStat, RangeStats};
+use crate::database::{Activity, Category, Database, ManualEntry, Rule, DomainStat, RangeStats};
 use crate::plugin_system::api::PluginAPI;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -1262,207 +1262,6 @@ pub fn show_idle_prompt(
     Ok(())
 }
 
-// ========== PROJECT COMMANDS ==========
-
-/// Create a project
-#[tauri::command]
-pub fn create_project(
-    state: State<'_, AppState>,
-    name: String,
-    client_name: Option<String>,
-    color: String,
-    is_billable: bool,
-    hourly_rate: f64,
-    budget_hours: Option<f64>,
-) -> Result<Project, String> {
-    let registry = state.plugin_registry.as_ref()
-        .ok_or_else(|| "Plugin registry not available".to_string())?;
-    
-    let params = serde_json::json!({
-        "name": name,
-        "client_name": client_name,
-        "color": color,
-        "is_billable": is_billable,
-        "hourly_rate": hourly_rate,
-        "budget_hours": budget_hours,
-    });
-    
-    let value = invoke_plugin_command_with_api(&state, "projects-tasks-plugin", "create_project", params)?;
-    serde_json::from_value(value).map_err(|e| format!("Failed to deserialize project: {}", e))
-}
-
-/// Get all projects
-#[tauri::command]
-pub fn get_projects(
-    state: State<'_, AppState>,
-    include_archived: bool,
-) -> Result<Vec<Project>, String> {
-    let registry = state.plugin_registry.as_ref()
-        .ok_or_else(|| "Plugin registry not available".to_string())?;
-    
-    let params = serde_json::json!({
-        "include_archived": include_archived,
-    });
-    
-    let value = invoke_plugin_command_with_api(&state, "projects-tasks-plugin", "get_projects", params)?;
-    serde_json::from_value(value).map_err(|e| format!("Failed to deserialize projects: {}", e))
-}
-
-/// Update a project
-#[tauri::command]
-pub fn update_project(
-    state: State<'_, AppState>,
-    id: i64,
-    name: String,
-    client_name: Option<String>,
-    color: String,
-    is_billable: bool,
-    hourly_rate: f64,
-    budget_hours: Option<f64>,
-    is_archived: Option<bool>,
-) -> Result<Project, String> {
-    let registry = state.plugin_registry.as_ref()
-        .ok_or_else(|| "Plugin registry not available".to_string())?;
-    
-    let params = serde_json::json!({
-        "id": id,
-        "name": name,
-        "client_name": client_name,
-        "color": color,
-        "is_billable": is_billable,
-        "hourly_rate": hourly_rate,
-        "budget_hours": budget_hours,
-        "is_archived": is_archived,
-    });
-    
-    let value = invoke_plugin_command_with_api(&state, "projects-tasks-plugin", "update_project", params)?;
-    serde_json::from_value(value).map_err(|e| format!("Failed to deserialize project: {}", e))
-}
-
-/// Delete a project (archive)
-#[tauri::command]
-pub fn delete_project(state: State<'_, AppState>, id: i64) -> Result<(), String> {
-    let registry = state.plugin_registry.as_ref()
-        .ok_or_else(|| "Plugin registry not available".to_string())?;
-    
-    let params = serde_json::json!({ "id": id });
-    invoke_plugin_command_with_api(&state, "projects-tasks-plugin", "delete_project", params)?;
-    Ok(())
-}
-
-// ========== TASK COMMANDS ==========
-
-/// Create a task
-#[tauri::command]
-pub fn create_task(
-    state: State<'_, AppState>,
-    project_id: i64,
-    name: String,
-    description: Option<String>,
-) -> Result<Task, String> {
-    let registry = state.plugin_registry.as_ref()
-        .ok_or_else(|| "Plugin registry not available".to_string())?;
-    
-    let params = serde_json::json!({
-        "project_id": project_id,
-        "name": name,
-        "description": description,
-    });
-    
-    let value = invoke_plugin_command_with_api(&state, "projects-tasks-plugin", "create_task", params)?;
-    serde_json::from_value(value).map_err(|e| format!("Failed to deserialize task: {}", e))
-}
-
-/// Get tasks
-#[tauri::command]
-pub fn get_tasks(
-    state: State<'_, AppState>,
-    project_id: Option<i64>,
-    include_archived: bool,
-) -> Result<Vec<Task>, String> {
-    let registry = state.plugin_registry.as_ref()
-        .ok_or_else(|| "Plugin registry not available".to_string())?;
-    
-    let params = serde_json::json!({
-        "project_id": project_id,
-        "include_archived": include_archived,
-    });
-    
-    let value = invoke_plugin_command_with_api(&state, "projects-tasks-plugin", "get_tasks", params)?;
-    serde_json::from_value(value).map_err(|e| format!("Failed to deserialize tasks: {}", e))
-}
-
-/// Update a task
-#[tauri::command]
-pub fn update_task(
-    state: State<'_, AppState>,
-    id: i64,
-    name: String,
-    description: Option<String>,
-    archived: Option<bool>,
-) -> Result<Task, String> {
-    state
-        .db
-        .update_task(id, &name, description.as_deref(), archived)
-        .map_err(|e| e.to_string())?;
-    
-    state
-        .db
-        .get_task_by_id(id)
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| "Task not found".to_string())
-}
-
-/// Delete a task (archive)
-#[tauri::command]
-pub fn delete_task(state: State<'_, AppState>, id: i64) -> Result<(), String> {
-    let registry = state.plugin_registry.as_ref()
-        .ok_or_else(|| "Plugin registry not available".to_string())?;
-    
-    let params = serde_json::json!({ "id": id });
-    invoke_plugin_command_with_api(&state, "projects-tasks-plugin", "delete_task", params)?;
-    Ok(())
-}
-
-// ========== BILLABLE TIME COMMANDS ==========
-
-/// Get billable hours for a time range
-#[tauri::command]
-pub fn get_billable_hours(
-    state: State<'_, AppState>,
-    start: i64,
-    end: i64,
-) -> Result<i64, String> {
-    let registry = state.plugin_registry.as_ref()
-        .ok_or_else(|| "Plugin registry not available".to_string())?;
-    
-    let params = serde_json::json!({
-        "start": start,
-        "end": end,
-    });
-    
-    let value = invoke_plugin_command_with_api(&state, "billing-plugin", "get_billable_hours", params)?;
-    value.as_i64().ok_or_else(|| "Invalid response from plugin".to_string())
-}
-
-/// Get billable revenue for a time range
-#[tauri::command]
-pub fn get_billable_revenue(
-    state: State<'_, AppState>,
-    start: i64,
-    end: i64,
-) -> Result<f64, String> {
-    let registry = state.plugin_registry.as_ref()
-        .ok_or_else(|| "Plugin registry not available".to_string())?;
-    
-    let params = serde_json::json!({
-        "start": start,
-        "end": end,
-    });
-    
-    let value = invoke_plugin_command_with_api(&state, "billing-plugin", "get_billable_revenue", params)?;
-    value.as_f64().ok_or_else(|| "Invalid response from plugin".to_string())
-}
 
 // ========== DOMAIN COMMANDS ==========
 
@@ -1480,108 +1279,6 @@ pub fn get_top_domains(
         .map_err(|e| e.to_string())
 }
 
-// ========== POMODORO COMMANDS ==========
-
-/// Start Pomodoro timer
-#[tauri::command]
-pub fn start_pomodoro(
-    state: State<'_, AppState>,
-    pomodoro_type: String,
-    project_id: Option<i64>,
-    task_id: Option<i64>,
-) -> Result<i64, String> {
-    // Set active project/task for automatic tracking
-    *state.active_project_id.lock().unwrap() = project_id;
-    *state.active_task_id.lock().unwrap() = task_id;
-    
-    // Create Pomodoro session
-    state
-        .db
-        .create_focus_session(&pomodoro_type, project_id, task_id)
-        .map_err(|e| e.to_string())
-}
-
-/// Stop Pomodoro timer
-#[tauri::command]
-pub fn stop_pomodoro(
-    state: State<'_, AppState>,
-    session_id: i64,
-    duration_sec: i64,
-    completed: bool,
-) -> Result<(), String> {
-    let registry = state.plugin_registry.as_ref()
-        .ok_or_else(|| "Plugin registry not available".to_string())?;
-    
-    let params = serde_json::json!({
-        "session_id": session_id,
-        "duration_sec": duration_sec,
-        "completed": completed,
-    });
-    
-    invoke_plugin_command_with_api(&state, "pomodoro-plugin", "stop_pomodoro", params)?;
-    Ok(())
-}
-
-/// Get focus sessions for a time range
-#[tauri::command]
-pub fn get_focus_sessions(
-    state: State<'_, AppState>,
-    start: i64,
-    end: i64,
-) -> Result<Vec<FocusSession>, String> {
-    let registry = state.plugin_registry.as_ref()
-        .ok_or_else(|| "Plugin registry not available".to_string())?;
-    
-    let params = serde_json::json!({
-        "start": start,
-        "end": end,
-    });
-    
-    let value = invoke_plugin_command_with_api(&state, "pomodoro-plugin", "get_focus_sessions", params)?;
-    serde_json::from_value(value).map_err(|e| format!("Failed to deserialize sessions: {}", e))
-}
-
-/// Get count of completed work sessions for today
-#[tauri::command]
-pub fn get_completed_work_sessions_count_today(
-    state: State<'_, AppState>
-) -> Result<i32, String> {
-    let registry = state.plugin_registry.as_ref()
-        .ok_or_else(|| "Plugin registry not available".to_string())?;
-    
-    let params = serde_json::json!({});
-    let value = invoke_plugin_command_with_api(&state, "pomodoro-plugin", "get_completed_work_sessions_count_today", params)?;
-    value.as_i64()
-        .and_then(|v| i32::try_from(v).ok())
-        .ok_or_else(|| "Invalid response from plugin".to_string())
-}
-
-/// Get active (not ended) pomodoro session
-#[tauri::command]
-pub fn get_active_pomodoro_session(
-    state: State<'_, AppState>
-) -> Result<Option<FocusSession>, String> {
-    let registry = state.plugin_registry.as_ref()
-        .ok_or_else(|| "Plugin registry not available".to_string())?;
-    
-    let params = serde_json::json!({});
-    let value = invoke_plugin_command_with_api(&state, "pomodoro-plugin", "get_active_pomodoro_session", params)?;
-    serde_json::from_value(value).map_err(|e| format!("Failed to deserialize session: {}", e))
-}
-
-/// Delete focus session
-#[tauri::command]
-pub fn delete_focus_session(
-    state: State<'_, AppState>,
-    id: i64,
-) -> Result<(), String> {
-    let registry = state.plugin_registry.as_ref()
-        .ok_or_else(|| "Plugin registry not available".to_string())?;
-    
-    let params = serde_json::json!({ "id": id });
-    invoke_plugin_command_with_api(&state, "pomodoro-plugin", "delete_focus_session", params)?;
-    Ok(())
-}
 
 // ========== ACTIVE PROJECT/TASK COMMANDS ==========
 
@@ -1621,118 +1318,6 @@ pub fn get_active_task(state: State<'_, AppState>) -> Result<Option<i64>, String
     Ok(*state.active_task_id.lock().unwrap())
 }
 
-// ========== GOAL COMMANDS ==========
-
-/// Create a goal
-#[tauri::command]
-pub fn create_goal(
-    state: State<'_, AppState>,
-    goal_type: String,
-    target_seconds: i64,
-    category_id: Option<i64>,
-    project_id: Option<i64>,
-    start_date: i64,
-    end_date: Option<i64>,
-    name: Option<String>,
-) -> Result<i64, String> {
-    let registry = state.plugin_registry.as_ref()
-        .ok_or_else(|| "Plugin registry not available".to_string())?;
-    
-    let params = serde_json::json!({
-        "goal_type": goal_type,
-        "target_seconds": target_seconds,
-        "category_id": category_id,
-        "project_id": project_id,
-        "start_date": start_date,
-        "end_date": end_date,
-        "name": name,
-    });
-    
-    let value = invoke_plugin_command_with_api(&state, "goals-plugin", "create_goal", params)?;
-    value.as_i64().ok_or_else(|| "Invalid response from plugin".to_string())
-}
-
-/// Get goals
-#[tauri::command]
-pub fn get_goals(
-    state: State<'_, AppState>,
-    active_only: bool,
-) -> Result<Vec<Goal>, String> {
-    let registry = state.plugin_registry.as_ref()
-        .ok_or_else(|| "Plugin registry not available".to_string())?;
-    
-    let params = serde_json::json!({
-        "active_only": active_only,
-    });
-    
-    let value = invoke_plugin_command_with_api(&state, "goals-plugin", "get_goals", params)?;
-    serde_json::from_value(value).map_err(|e| format!("Failed to deserialize goals: {}", e))
-}
-
-/// Update a goal
-#[tauri::command]
-pub fn update_goal(
-    state: State<'_, AppState>,
-    id: i64,
-    goal_type: String,
-    target_seconds: i64,
-    category_id: Option<i64>,
-    project_id: Option<i64>,
-    start_date: i64,
-    end_date: Option<i64>,
-    active: bool,
-    name: Option<String>,
-) -> Result<(), String> {
-    state
-        .db
-        .update_goal(id, &goal_type, target_seconds, category_id, project_id, start_date, end_date, active, name.as_deref())
-        .map_err(|e| e.to_string())
-}
-
-/// Delete a goal
-#[tauri::command]
-pub fn delete_goal(state: State<'_, AppState>, id: i64) -> Result<(), String> {
-    let registry = state.plugin_registry.as_ref()
-        .ok_or_else(|| "Plugin registry not available".to_string())?;
-    
-    let params = serde_json::json!({ "id": id });
-    invoke_plugin_command_with_api(&state, "goals-plugin", "delete_goal", params)?;
-    Ok(())
-}
-
-/// Get goal progress
-#[tauri::command]
-pub fn get_goal_progress(
-    state: State<'_, AppState>,
-    goal_id: i64,
-    start: i64,
-    end: i64,
-) -> Result<GoalProgress, String> {
-    let registry = state.plugin_registry.as_ref()
-        .ok_or_else(|| "Plugin registry not available".to_string())?;
-    
-    let params = serde_json::json!({
-        "goal_id": goal_id,
-        "start": start,
-        "end": end,
-    });
-    
-    let value = invoke_plugin_command_with_api(&state, "goals-plugin", "get_goal_progress", params)?;
-    serde_json::from_value(value).map_err(|e| format!("Failed to deserialize progress: {}", e))
-}
-
-/// Check goal alerts
-#[tauri::command]
-pub fn check_goal_alerts(
-    state: State<'_, AppState>,
-) -> Result<Vec<GoalAlert>, String> {
-    let registry = state.plugin_registry.as_ref()
-        .ok_or_else(|| "Plugin registry not available".to_string())?;
-    
-    let params = serde_json::json!({});
-    let value = invoke_plugin_command_with_api(&state, "goals-plugin", "check_goal_alerts", params)?;
-    serde_json::from_value(value).map_err(|e| format!("Failed to deserialize alerts: {}", e))
-}
 
 // ========== PLUGIN COMMANDS ==========
 
@@ -1748,7 +1333,8 @@ pub struct InstalledPluginInfo {
     pub description: Option<String>,
     pub repository_url: Option<String>,
     pub manifest_path: Option<String>,
-    pub is_builtin: bool,
+    pub frontend_entry: Option<String>,
+    pub frontend_components: Option<Vec<String>>,
     pub enabled: bool,
 }
 
@@ -1871,7 +1457,7 @@ pub async fn discover_plugin(repository_url: String) -> Result<RegistryPluginInf
         id: plugin_id.to_string(),
         name: manifest.plugin.display_name.unwrap_or(manifest.plugin.name.clone()),
         author: manifest.plugin.author,
-        repository: manifest.plugin.repository,
+        repository: manifest.plugin.repository.unwrap_or(repository_url.clone()),
         latest_version: manifest.plugin.version,
         description: manifest.plugin.description,
         category: None,
@@ -1918,6 +1504,13 @@ pub async fn install_plugin(
     let installed_manifest = loader.load_manifest(&manifest_path)?;
     loader.validate_manifest(&installed_manifest)?;
     
+    // Extract frontend entry and components from manifest
+    let frontend_entry = installed_manifest.frontend.as_ref()
+        .and_then(|f| f.entry.clone());
+    let frontend_components = installed_manifest.frontend.as_ref()
+        .and_then(|f| f.components.clone())
+        .map(|components| serde_json::to_string(&components).unwrap_or_default());
+    
     // Register in database
     state.db.install_plugin_with_repo(
         &plugin_id,
@@ -1926,8 +1519,39 @@ pub async fn install_plugin(
         Some(&installed_manifest.plugin.description),
         Some(&repository_url),
         manifest_path.to_str(),
-        false,
+        frontend_entry.as_deref(),
+        frontend_components.as_deref(),
     )?;
+    
+    // Load plugin into runtime if plugin_registry is available
+    if let Some(plugin_registry) = &state.plugin_registry {
+        if let Some(extension_registry) = &state.extension_registry {
+            match loader.load_dynamic_plugin(&plugin_id) {
+                Ok(mut plugin) => {
+                    use crate::plugin_system::api::PluginAPI;
+                    use time_tracker_plugin_sdk::PluginAPIInterface;
+                    
+                    let api = PluginAPI::new(Arc::clone(&state.db), Arc::clone(extension_registry), plugin_id.clone());
+                    match plugin.initialize(&api as &dyn PluginAPIInterface) {
+                        Ok(()) => {
+                            if let Err(e) = plugin_registry.register(plugin) {
+                                eprintln!("Warning: Failed to register plugin {} after installation: {}", plugin_id, e);
+                            } else {
+                                eprintln!("Loaded and registered plugin after installation: {}", plugin_id);
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("Warning: Failed to initialize plugin {} after installation: {}", plugin_id, e);
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Warning: Failed to load plugin {} after installation: {}", plugin_id, e);
+                    // Don't fail installation if loading fails - plugin will be loaded on next restart
+                }
+            }
+        }
+    }
     
     Ok(())
 }
@@ -1937,7 +1561,11 @@ pub async fn install_plugin(
 pub fn list_installed_plugins(state: State<'_, AppState>) -> Result<Vec<InstalledPluginInfo>, String> {
     let plugins = state.db.get_installed_plugins()?;
     
-    Ok(plugins.into_iter().map(|(id, name, version, description, repository_url, manifest_path, is_builtin, enabled)| {
+    Ok(plugins.into_iter().map(|(id, name, version, description, repository_url, manifest_path, frontend_entry, frontend_components, enabled)| {
+        // Parse frontend_components from JSON string if present
+        let components: Option<Vec<String>> = frontend_components
+            .and_then(|s| serde_json::from_str(&s).ok());
+        
         InstalledPluginInfo {
             id,
             name,
@@ -1945,7 +1573,8 @@ pub fn list_installed_plugins(state: State<'_, AppState>) -> Result<Vec<Installe
             description,
             repository_url,
             manifest_path,
-            is_builtin,
+            frontend_entry,
+            frontend_components: components,
             enabled,
         }
     }).collect())
@@ -1957,15 +1586,7 @@ pub async fn uninstall_plugin(
     state: State<'_, AppState>,
     plugin_id: String,
 ) -> Result<(), String> {
-    // Check if plugin is builtin
-    let plugins = state.db.get_installed_plugins()?;
-    if let Some((_, _, _, _, _, _, is_builtin, _)) = plugins.iter().find(|(id, _, _, _, _, _, _, _)| id == &plugin_id) {
-        if *is_builtin {
-            return Err("Cannot uninstall built-in plugins".to_string());
-        }
-    }
-    
-    // Remove from database
+    // Remove from database (all plugins can be uninstalled now)
     state.db.uninstall_plugin(&plugin_id)?;
     
     // Remove files
@@ -1997,7 +1618,7 @@ pub fn disable_plugin(
     state.db.set_plugin_enabled(&plugin_id, false)
 }
 
-/// Load plugin into runtime (for dynamic libraries - placeholder for now)
+/// Load plugin into runtime (for dynamic libraries)
 #[tauri::command]
 pub fn load_plugin(
     state: State<'_, AppState>,
@@ -2006,16 +1627,44 @@ pub fn load_plugin(
     // Check if plugin is installed and enabled
     let plugins = state.db.get_installed_plugins()?;
     let plugin_info = plugins.iter()
-        .find(|(id, _, _, _, _, _, _, _)| id == &plugin_id)
+        .find(|(id, _, _, _, _, _, _, _, _)| id == &plugin_id)
         .ok_or_else(|| format!("Plugin {} not found", plugin_id))?;
     
-    if !plugin_info.6 { // enabled field
+    if !plugin_info.8 { // enabled field
         return Err("Plugin is disabled".to_string());
     }
     
-    // TODO: Implement dynamic library loading with libloading
-    // For now, built-in plugins are already loaded in main.rs
-    // External plugins will require libloading implementation
+    // Load plugin if plugin_registry is available
+    if let Some(plugin_registry) = &state.plugin_registry {
+        if let Some(extension_registry) = &state.extension_registry {
+            let data_dir = dirs::data_dir()
+                .unwrap_or_else(|| std::path::PathBuf::from("."))
+                .join("timetracker");
+            let plugins_dir = data_dir.join("plugins");
+            let loader = crate::plugin_system::loader::PluginLoader::new(plugins_dir);
+            
+            match loader.load_dynamic_plugin(&plugin_id) {
+                Ok(mut plugin) => {
+                    use crate::plugin_system::api::PluginAPI;
+                    use time_tracker_plugin_sdk::PluginAPIInterface;
+                    
+                    let api = PluginAPI::new(Arc::clone(&state.db), Arc::clone(extension_registry), plugin_id.clone());
+                    match plugin.initialize(&api as &dyn PluginAPIInterface) {
+                        Ok(()) => {
+                            plugin_registry.register(plugin)
+                                .map_err(|e| format!("Failed to register plugin: {}", e))?;
+                        }
+                        Err(e) => {
+                            return Err(format!("Failed to initialize plugin: {}", e));
+                        }
+                    }
+                }
+                Err(e) => {
+                    return Err(format!("Failed to load plugin library: {}", e));
+                }
+            }
+        }
+    }
     
     Ok(())
 }

@@ -1,12 +1,18 @@
 import { Package, Trash2, Power, PowerOff, AlertCircle } from 'lucide-react';
 import type { InstalledPlugin } from '../../types/plugin';
-import { usePlugins } from '../../hooks/usePlugins';
 import Button from '../Common/Button';
 import LoadingSpinner from '../Common/LoadingSpinner';
 import { showSuccess, handleApiError } from '../../utils/toast';
 
-export default function InstalledPlugins() {
-  const { plugins, isLoading, enablePlugin, disablePlugin, uninstallPlugin } = usePlugins();
+interface InstalledPluginsProps {
+  plugins: InstalledPlugin[];
+  isLoading: boolean;
+  enablePlugin: (pluginId: string) => Promise<boolean>;
+  disablePlugin: (pluginId: string) => Promise<boolean>;
+  uninstallPlugin: (pluginId: string) => Promise<boolean>;
+}
+
+export default function InstalledPlugins({ plugins, isLoading, enablePlugin, disablePlugin, uninstallPlugin }: InstalledPluginsProps) {
 
   const handleToggle = async (plugin: InstalledPlugin) => {
     if (plugin.enabled) {
@@ -23,15 +29,12 @@ export default function InstalledPlugins() {
   };
 
   const handleUninstall = async (plugin: InstalledPlugin) => {
-    if (plugin.is_builtin) {
-      handleApiError(new Error('Cannot uninstall built-in plugins'), 'Built-in plugins cannot be uninstalled');
-      return;
-    }
-
     if (window.confirm(`Are you sure you want to uninstall "${plugin.name}"?`)) {
       const success = await uninstallPlugin(plugin.id);
       if (success) {
         showSuccess(`Plugin "${plugin.name}" uninstalled`);
+        // Notify parent component to refetch installed plugins list
+        onUninstall?.();
       }
     }
   };
@@ -70,11 +73,6 @@ export default function InstalledPlugins() {
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                     {plugin.name}
                   </h3>
-                  {plugin.is_builtin && (
-                    <span className="px-2 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded">
-                      Built-in
-                    </span>
-                  )}
                   <span
                     className={`px-2 py-0.5 text-xs font-medium rounded ${
                       plugin.enabled
@@ -121,15 +119,13 @@ export default function InstalledPlugins() {
                   <PowerOff className="w-5 h-5" />
                 )}
               </button>
-              {!plugin.is_builtin && (
-                <button
-                  onClick={() => handleUninstall(plugin)}
-                  className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                  title="Uninstall plugin"
-                >
-                  <Trash2 className="w-5 h-5" />
-                </button>
-              )}
+              <button
+                onClick={() => handleUninstall(plugin)}
+                className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                title="Uninstall plugin"
+              >
+                <Trash2 className="w-5 h-5" />
+              </button>
             </div>
           </div>
         </div>

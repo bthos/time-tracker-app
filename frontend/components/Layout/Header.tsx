@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 import { useStore } from '../../store';
 import DateRangeSelector from './DateRangeSelector';
 import { useStartThinkingMode, useStopThinkingMode, usePauseTracking, useResumeTracking } from '../../hooks/useTracker';
-import { usePomodoro } from '../../hooks/usePomodoro';
+// Pomodoro functionality is now provided by plugins
 import { formatTimerTime } from '../../utils/format';
 import { handleApiError, showSuccess } from '../../utils/toast';
 import { api } from '../../services/api';
@@ -26,8 +26,10 @@ export default function Header({ onAddEntry, onMenuClick }: HeaderProps) {
   const pauseTracking = usePauseTracking();
   const resumeTracking = useResumeTracking();
   
-  // Global pomodoro hook - always active
-  const { status: pomodoroStatus, pausePomodoro, resumePomodoro } = usePomodoro();
+  // Pomodoro status is now provided by plugins
+  const pomodoroStatus = { is_running: false, is_active: false, pomodoro_type: 'work' as const };
+  const pausePomodoro = () => {};
+  const resumePomodoro = () => {};
 
   // Find break category for pause functionality
   const breakCategoryId = useMemo(() => {
