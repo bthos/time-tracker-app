@@ -403,13 +403,21 @@ pub fn update_category(
         .update_category(id, &name, &color, icon.as_deref(), is_productive_bool, is_billable_bool, hourly_rate, sort_order, is_pinned_bool, project_id, task_id)
         .map_err(|e| e.to_string())?;
     
-    state
-        .db
-        .get_categories()
-        .map_err(|e| e.to_string())?
-        .into_iter()
-        .find(|c| c.id == id)
-        .ok_or_else(|| "Category not found".to_string())
+    // Return updated category without querying DB again
+    Ok(Category {
+        id,
+        name,
+        color,
+        icon,
+        is_productive: is_productive_bool,
+        is_billable: is_billable_bool,
+        hourly_rate,
+        sort_order,
+        is_system: current_category.is_system,
+        is_pinned: is_pinned_bool,
+        project_id,
+        task_id,
+    })
 }
 
 /// Delete category
@@ -470,13 +478,14 @@ pub fn update_rule(
         .update_rule(id, &rule_type, &pattern, category_id, priority)
         .map_err(|e| e.to_string())?;
     
-    state
-        .db
-        .get_rules()
-        .map_err(|e| e.to_string())?
-        .into_iter()
-        .find(|r| r.id == id)
-        .ok_or_else(|| "Rule not found".to_string())
+    // Return updated rule without querying DB again
+    Ok(Rule {
+        id,
+        rule_type,
+        pattern,
+        category_id,
+        priority,
+    })
 }
 
 /// Create manual entry
@@ -542,15 +551,17 @@ pub fn update_manual_entry(
         )
         .map_err(|e| e.to_string())?;
     
-    let entries = state
-        .db
-        .get_manual_entries(started_at - 1, ended_at + 1)
-        .map_err(|e| e.to_string())?;
-    
-    entries
-        .into_iter()
-        .find(|e| e.id == id)
-        .ok_or_else(|| "Entry not found".to_string())
+    // Return updated entry without querying DB again
+    Ok(ManualEntry {
+        id,
+        description,
+        category_id,
+        project,
+        project_id,
+        task_id,
+        started_at,
+        ended_at,
+    })
 }
 
 /// Delete manual entry
@@ -594,12 +605,10 @@ pub fn stop_manual_entry(state: State<'_, AppState>) -> Result<ManualEntry, Stri
     let now = Utc::now().timestamp();
     
     // Get the entry to find its start time
-    let entries = state
+    let entry = state
         .db
         .get_manual_entries(now - 86400, now + 86400)
-        .map_err(|e| e.to_string())?;
-    
-    let entry = entries
+        .map_err(|e| e.to_string())?
         .into_iter()
         .find(|e| e.id == entry_id)
         .ok_or_else(|| "Entry not found".to_string())?;
@@ -619,15 +628,17 @@ pub fn stop_manual_entry(state: State<'_, AppState>) -> Result<ManualEntry, Stri
         )
         .map_err(|e| e.to_string())?;
     
-    let updated_entries = state
-        .db
-        .get_manual_entries(now - 86400, now + 86400)
-        .map_err(|e| e.to_string())?;
-    
-    updated_entries
-        .into_iter()
-        .find(|e| e.id == entry_id)
-        .ok_or_else(|| "Failed to retrieve updated entry".to_string())
+    // Return updated entry (with new end time)
+    Ok(ManualEntry {
+        id: entry.id,
+        description: entry.description,
+        category_id: entry.category_id,
+        project: entry.project,
+        project_id: entry.project_id,
+        task_id: entry.task_id,
+        started_at: entry.started_at,
+        ended_at: now,
+    })
 }
 
 /// Get all settings
@@ -986,12 +997,7 @@ pub fn resume_tracking(state: State<'_, AppState>) -> Result<(), String> {
 pub fn get_tracking_status(state: State<'_, AppState>) -> Result<serde_json::Value, String> {
     let (is_paused, current_app) = if let Some(tracker) = state.tracker.lock().unwrap().as_ref() {
         let is_paused = tracker.is_paused();
-        let current_app = if !is_paused {
-            tracker.get_current_app()
-        } else {
-            None
-        };
-        (is_paused, current_app)
+        (is_paused, if !is_paused { tracker.get_current_app() } else { None })
     } else {
         (false, None)
     };
@@ -1034,12 +1040,11 @@ pub fn stop_thinking_mode(state: State<'_, AppState>) -> Result<(), String> {
     let now = Utc::now().timestamp();
     
     // Get the entry to find its start time
-    let entries = state
+    let entry = state
         .db
         .get_manual_entries(now - 86400, now + 86400)
-        .map_err(|e| e.to_string())?;
-    
-    let entry = entries.iter()
+        .map_err(|e| e.to_string())?
+        .into_iter()
         .find(|e| e.id == entry_id)
         .ok_or_else(|| "Entry not found".to_string())?;
     
@@ -1204,34 +1209,29 @@ pub fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// Helper function to create AutostartManager
+fn create_autostart_manager() -> Result<crate::autostart::AutostartManager, String> {
+    let app_name = "Time Tracker".to_string();
+    let app_path = std::env::current_exe().map_err(|e| format!("Failed to get app path: {}", e))?;
+    Ok(crate::autostart::AutostartManager::new(app_name, app_path))
+}
+
 /// Enable autostart
 #[tauri::command]
 pub fn enable_autostart(_app: tauri::AppHandle) -> Result<(), String> {
-    let app_name = "Time Tracker".to_string();
-    let app_path = std::env::current_exe().map_err(|e| format!("Failed to get app path: {}", e))?;
-    
-    let autostart_manager = crate::autostart::AutostartManager::new(app_name, app_path);
-    autostart_manager.enable()
+    create_autostart_manager()?.enable()
 }
 
 /// Disable autostart
 #[tauri::command]
 pub fn disable_autostart(_app: tauri::AppHandle) -> Result<(), String> {
-    let app_name = "Time Tracker".to_string();
-    let app_path = std::env::current_exe().map_err(|e| format!("Failed to get app path: {}", e))?;
-    
-    let autostart_manager = crate::autostart::AutostartManager::new(app_name, app_path);
-    autostart_manager.disable()
+    create_autostart_manager()?.disable()
 }
 
 /// Check if autostart is enabled
 #[tauri::command]
 pub fn is_autostart_enabled(_app: tauri::AppHandle) -> Result<bool, String> {
-    let app_name = "Time Tracker".to_string();
-    let app_path = std::env::current_exe().map_err(|e| format!("Failed to get app path: {}", e))?;
-    
-    let autostart_manager = crate::autostart::AutostartManager::new(app_name, app_path);
-    autostart_manager.is_enabled()
+    create_autostart_manager()?.is_enabled()
 }
 
 /// Hide main window

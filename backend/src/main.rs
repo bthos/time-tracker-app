@@ -215,12 +215,12 @@ fn main() {
                 *tracker_ref = Some(Arc::clone(&tracker));
             }
             
-            // Clone app handle for the closure
-            let app_handle_clone = app_handle.clone();
+            // Clone app handle for the closure (needed because it's also used for tray)
+            let app_handle_for_tracker = app_handle.clone();
             
             tracker.start(move |idle_minutes, started_at| {
                 // Emit idle-return event to frontend
-                if let Some(window) = app_handle_clone.get_window("main") {
+                if let Some(window) = app_handle_for_tracker.get_window("main") {
                     window
                         .emit("idle-return", serde_json::json!({ 
                             "duration_minutes": idle_minutes,

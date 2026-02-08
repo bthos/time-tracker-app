@@ -214,7 +214,6 @@ impl Tracker {
         let active_project_id = Arc::clone(&self.active_project_id);
         let active_task_id = Arc::clone(&self.active_task_id);
         let idle_threshold = Arc::clone(&self.idle_threshold_secs);
-        let _prompt_threshold = Arc::clone(&self.prompt_threshold_secs);
         let idle_monitor = Arc::clone(&self.idle_monitor);
 
         thread::spawn(move || {
