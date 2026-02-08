@@ -30,6 +30,7 @@ function App() {
   const { isLoading: settingsLoading } = useSettings();
   const { isLoading: activitiesLoading, refetch: refetchActivities } = useActivities();
   const { isLoading: categoriesLoading } = useCategories();
+  const { routes: pluginRoutes } = usePluginFrontend();
 
   const isTrackingPaused = useStore((state) => state.isTrackingPaused);
   const darkMode = useStore((state) => state.settings.darkMode);
