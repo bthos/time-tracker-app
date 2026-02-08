@@ -385,7 +385,7 @@ jobs:
         run: |
           cd plugin-sdk
           VERSION="${{ needs.prepare-release.outputs.version }}"
-          SDK_VERSION=$(grep -A 1 "^\[package\]" Cargo.toml | grep "version.workspace" || echo "")
+          SDK_VERSION=$(grep -A 5 "^\[package\]" Cargo.toml | grep "version.workspace" || echo "")
           if [ -z "$SDK_VERSION" ]; then
             echo "Error: SDK Cargo.toml doesn't use workspace version"
             exit 1
