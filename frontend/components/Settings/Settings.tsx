@@ -43,7 +43,8 @@ const Settings: React.FC<SettingsProps> = () => {
   const [editingCategory, setEditingCategory] = useState<Partial<Category> | null>(null);
   const [editingProjectId, setEditingProjectId] = useState<number | null>(null);
   // Projects are now handled by plugins, but we keep this for category editing compatibility
-  const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
   const [newRule, setNewRule] = useState<Partial<Rule>>({
     rule_type: 'app_name',
     pattern: '',

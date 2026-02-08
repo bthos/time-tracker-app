@@ -1,8 +1,7 @@
-import { Package, Trash2, Power, PowerOff, AlertCircle } from 'lucide-react';
+import { Package, Trash2, Power, PowerOff } from 'lucide-react';
 import type { InstalledPlugin } from '../../types/plugin';
-import Button from '../Common/Button';
 import LoadingSpinner from '../Common/LoadingSpinner';
-import { showSuccess, handleApiError } from '../../utils/toast';
+import { showSuccess } from '../../utils/toast';
 
 interface InstalledPluginsProps {
   plugins: InstalledPlugin[];

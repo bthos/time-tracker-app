@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Package, Download, Settings } from 'lucide-react';
+import { Package } from 'lucide-react';
 import { usePluginRegistry } from '../../hooks/usePluginRegistry';
 import { usePlugins } from '../../hooks/usePlugins';
 import PluginCard from './PluginCard';

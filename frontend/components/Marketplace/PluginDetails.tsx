@@ -1,4 +1,4 @@
-import { X, Download, CheckCircle2, ExternalLink, Code, User, Calendar } from 'lucide-react';
+import { X, Download, CheckCircle2, ExternalLink, Code, User } from 'lucide-react';
 import type { RegistryPlugin } from '../../types/plugin';
 import Button from '../Common/Button';
 import LoadingSpinner from '../Common/LoadingSpinner';
