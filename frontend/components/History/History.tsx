@@ -3,7 +3,7 @@ import { useStore } from '../../store';
 import { Activity, ManualEntry, FocusSession } from '../../types';
 import { formatDuration, formatTime, formatDate } from '../../utils/format';
 import Button from '../Common/Button';
-import { useActivities, useManualEntries, useDeleteActivity, useDeleteManualEntry } from '../../hooks';
+import { useActivities, useManualEntries, useDeleteActivity, useDeleteManualEntry, useDeleteFocusSession } from '../../hooks';
 // Focus Sessions, Projects, and Tasks are now provided by plugins
 import { useTrackerStatus } from '../../hooks/useTracker';
 import { SkeletonLoader } from '../Common/SkeletonLoader';

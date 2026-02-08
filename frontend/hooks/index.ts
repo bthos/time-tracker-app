@@ -4,5 +4,6 @@ export { useSettings, useUpdateSettings } from './useSettings';
 export { useRules } from './useRules';
 export { useTrackerStatus, usePauseTracking, useResumeTracking, useStartThinkingMode, useStopThinkingMode } from './useTracker';
 export { useManualEntries, useCreateManualEntry, useUpdateManualEntry, useDeleteManualEntry } from './useManualEntries';
+export { useDeleteFocusSession } from './useFocusSessions';
 export { usePlugins } from './usePlugins';
 export { usePluginRegistry } from './usePluginRegistry';

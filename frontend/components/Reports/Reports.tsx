@@ -10,6 +10,7 @@ import { presetToDateRange } from '../../store';
 import { api } from '../../services/api';
 import LoadingSpinner from '../Common/LoadingSpinner';
 import { Filter, X, DollarSign } from 'lucide-react';
+import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 type TimePeriod = 'today' | 'week' | 'month';
 
 export const Reports: React.FC = () => {
@@ -17,6 +18,21 @@ export const Reports: React.FC = () => {
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
   const [selectedDomain, setSelectedDomain] = useState<string | null>(null);
+  
+  // Compute dateRange from period
+  const dateRange = useMemo(() => {
+    const now = new Date();
+    switch (period) {
+      case 'today':
+        return { start: startOfDay(now), end: endOfDay(now) };
+      case 'week':
+        return { start: startOfWeek(now, { weekStartsOn: 1 }), end: endOfWeek(now, { weekStartsOn: 1 }) };
+      case 'month':
+        return { start: startOfMonth(now), end: endOfMonth(now) };
+      default:
+        return { start: startOfDay(now), end: endOfDay(now) };
+    }
+  }, [period]);
   
   const { data: activities = [], isLoading: activitiesLoading } = useActivities();
   const { data: categories = [], isLoading: categoriesLoading } = useCategories();
