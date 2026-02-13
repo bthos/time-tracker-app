@@ -1,9 +1,23 @@
 import { Activity, Category, Rule, ManualEntry, Settings, DailyStats, AppUsage, CategoryUsage, HourlyActivity, DateRange, Project, Task, Goal, GoalProgress, GoalAlert, FocusSession, DomainStat, StatsResponse } from '../types';
+import { isTauriAvailable } from '../utils/tauri';
 
-// Tauri invoke wrapper
+// Tauri invoke wrapper with web fallback
 const invoke = async <T>(cmd: string, args?: Record<string, unknown>): Promise<T> => {
-  const { invoke: tauriInvoke } = await import('@tauri-apps/api/tauri');
-  return tauriInvoke<T>(cmd, args);
+  // Check if Tauri is available before trying to use it
+  if (!isTauriAvailable()) {
+    throw new Error('This feature requires the desktop application. Please use the Tauri desktop app.');
+  }
+  
+  try {
+    const { invoke: tauriInvoke } = await import('@tauri-apps/api/tauri');
+    return tauriInvoke<T>(cmd, args);
+  } catch (error) {
+    // If import fails or invoke fails, provide a helpful error message
+    if (error instanceof Error && error.message.includes('__TAURI_IPC__')) {
+      throw new Error('This feature requires the desktop application. Please use the Tauri desktop app.');
+    }
+    throw error;
+  }
 };
 
 // Helper function to convert Date to Unix timestamp

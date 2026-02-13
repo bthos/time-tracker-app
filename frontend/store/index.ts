@@ -108,7 +108,7 @@ const defaultSettings: Settings = {
   defaultCategory: null,
   shortIdleAsThinking: true,
   darkMode: false,
-  enable_marketplace: false,
+  enable_marketplace: true, // Default to true for new installations
 };
 
 const store = create<AppState>()(

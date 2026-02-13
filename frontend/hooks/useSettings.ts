@@ -26,7 +26,7 @@ export function useSettings() {
         defaultCategory: currentSettings.defaultCategory ?? null,
         shortIdleAsThinking: currentSettings.shortIdleAsThinking ?? true,
         darkMode: currentSettings.darkMode ?? false,
-        enable_marketplace: query.data.enable_marketplace ?? false,
+        enable_marketplace: query.data.enable_marketplace ?? true, // Default to true for new installations
       });
     }
   }, [query.data, setSettings]);

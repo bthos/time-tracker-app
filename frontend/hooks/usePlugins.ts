@@ -1,7 +1,15 @@
 import { useState, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/tauri';
 import type { InstalledPlugin } from '../types/plugin';
 import { handleApiError } from '../utils/toast';
+import { isTauriAvailable } from '../utils/tauri';
+
+const invoke = async <T>(cmd: string, args?: Record<string, unknown>): Promise<T> => {
+  if (!isTauriAvailable()) {
+    throw new Error('This feature requires the desktop application. Please use the Tauri desktop app.');
+  }
+  const { invoke: tauriInvoke } = await import('@tauri-apps/api/tauri');
+  return tauriInvoke<T>(cmd, args);
+};
 
 export function usePlugins() {
   const [plugins, setPlugins] = useState<InstalledPlugin[]>([]);
@@ -12,6 +20,10 @@ export function usePlugins() {
     try {
       setIsLoading(true);
       setError(null);
+      if (!isTauriAvailable()) {
+        setError('Plugins require the desktop application.');
+        return;
+      }
       const result = await invoke<InstalledPlugin[]>('list_installed_plugins');
       setPlugins(result);
     } catch (err) {

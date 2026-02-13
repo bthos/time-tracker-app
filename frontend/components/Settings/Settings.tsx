@@ -224,6 +224,8 @@ const Settings: React.FC<SettingsProps> = () => {
         pomodoro_work_duration_seconds: pomodoroWorkSec,
         pomodoro_short_break_seconds: pomodoroShortBreakSec,
         pomodoro_long_break_seconds: pomodoroLongBreakSec,
+        plugin_registry_url: localSettings.plugin_registry_url,
+        plugin_registry_urls: localSettings.plugin_registry_urls,
       };
       await api.settings.updateSettings(backendSettings);
       // Reset editing flag before fetching updated settings
@@ -258,6 +260,8 @@ const Settings: React.FC<SettingsProps> = () => {
         pomodoro_work_duration_seconds: updated.pomodoro_work_duration_seconds,
         pomodoro_short_break_seconds: updated.pomodoro_short_break_seconds,
         pomodoro_long_break_seconds: updated.pomodoro_long_break_seconds,
+        plugin_registry_url: updated.plugin_registry_url,
+        plugin_registry_urls: updated.plugin_registry_urls,
       };
       setSettings(frontendSettings);
       

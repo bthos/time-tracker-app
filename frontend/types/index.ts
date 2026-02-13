@@ -93,6 +93,8 @@ export interface Settings {
   darkMode?: boolean;
   autoCategorizationEnabled?: boolean;
   enable_marketplace?: boolean;
+  plugin_registry_url?: string;
+  plugin_registry_urls?: string[];
 }
 
 // Statistics types

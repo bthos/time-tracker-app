@@ -7,3 +7,14 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv
 }
+
+// Tauri types
+interface Window {
+  __TAURI__?: {
+    window: {
+      getCurrent: () => {
+        show: () => Promise<void>;
+      };
+    };
+  };
+}

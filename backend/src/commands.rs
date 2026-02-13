@@ -671,6 +671,11 @@ pub struct SettingsResponse {
     pub pomodoro_short_break_seconds: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pomodoro_long_break_seconds: Option<i64>,
+    // Plugin registry URL
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub plugin_registry_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub plugin_registry_urls: Option<Vec<String>>,
 }
 
 #[tauri::command]
@@ -768,7 +773,7 @@ pub fn get_settings(state: State<'_, AppState>) -> Result<SettingsResponse, Stri
         enable_marketplace: settings
             .get("enable_marketplace")
             .map(|v| v == "true")
-            .unwrap_or(false),
+            .unwrap_or(true), // Default to true for new installations
         date_format: settings
             .get("date_format")
             .cloned()
@@ -785,6 +790,9 @@ pub fn get_settings(state: State<'_, AppState>) -> Result<SettingsResponse, Stri
         pomodoro_work_duration_seconds: Some(pomodoro_work_secs),
         pomodoro_short_break_seconds: Some(pomodoro_short_break_secs),
         pomodoro_long_break_seconds: Some(pomodoro_long_break_secs),
+        plugin_registry_url: settings.get("plugin_registry_url").cloned(),
+        plugin_registry_urls: settings.get("plugin_registry_urls")
+            .and_then(|v| serde_json::from_str::<Vec<String>>(v).ok()),
     })
 }
 
@@ -837,6 +845,18 @@ pub fn update_settings(
     settings_map.insert("pomodoro_long_break_minutes".to_string(), (pomodoro_long_break_secs / 60).to_string());
     settings_map.insert("pomodoro_sessions_until_long_break".to_string(), pomodoro_sessions_until_long_break.to_string());
     settings_map.insert("pomodoro_auto_transition_delay_seconds".to_string(), pomodoro_auto_transition_delay_secs.to_string());
+    
+    // Plugin registry URL (legacy support)
+    if let Some(url) = &settings.plugin_registry_url {
+        settings_map.insert("plugin_registry_url".to_string(), url.clone());
+    }
+    
+    // Plugin registry URLs (multiple repositories)
+    if let Some(urls) = &settings.plugin_registry_urls {
+        if let Ok(json) = serde_json::to_string(urls) {
+            settings_map.insert("plugin_registry_urls".to_string(), json);
+        }
+    }
     
     // Save settings to database
     state.db.set_settings(&settings_map).map_err(|e| e.to_string())?;
@@ -1358,56 +1378,141 @@ pub struct RegistryPluginInfo {
     pub api_version: Option<String>,
 }
 
-/// Get plugin registry from remote source
-#[tauri::command]
-pub async fn get_plugin_registry() -> Result<Vec<RegistryPluginInfo>, String> {
-    let registry_url = "https://raw.githubusercontent.com/bthos/time-tracker-plugins-registry/main/registry.json";
-    let mut discovery = PluginDiscovery::new(registry_url.to_string());
+/// Helper function to get registry URLs from settings
+fn get_registry_urls(state: &AppState) -> Result<Vec<String>, String> {
+    // Try to get multiple URLs first
+    if let Ok(Some(urls_json)) = state.db.get_setting("plugin_registry_urls") {
+        if let Ok(urls) = serde_json::from_str::<Vec<String>>(&urls_json) {
+            if !urls.is_empty() {
+                return Ok(urls);
+            }
+        }
+    }
     
-    let registry = discovery.get_registry().await?;
+    // Fallback to single URL (legacy support)
+    if let Ok(Some(url)) = state.db.get_setting("plugin_registry_url") {
+        if !url.is_empty() {
+            return Ok(vec![url]);
+        }
+    }
     
-    Ok(registry.plugins.into_iter().map(|p| RegistryPluginInfo {
-        id: p.id,
-        name: p.name,
-        author: p.author,
-        repository: p.repository,
-        latest_version: p.latest_version,
-        description: p.description,
-        category: p.category,
-        verified: p.verified,
-        downloads: p.downloads,
-        tags: p.tags,
-        license: p.license,
-        min_core_version: p.min_core_version,
-        max_core_version: p.max_core_version,
-        api_version: p.api_version,
-    }).collect())
+    // Default registry
+    Ok(vec!["https://raw.githubusercontent.com/tmtrckr/plugins-registry/main/registry.json".to_string()])
 }
 
-/// Search plugins in registry
+/// Helper function to fetch plugins from multiple registries and merge them
+async fn fetch_plugins_from_registries(urls: Vec<String>) -> Result<Vec<RegistryPluginInfo>, String> {
+    use futures::future::join_all;
+    
+    let mut all_plugins: std::collections::HashMap<String, RegistryPluginInfo> = std::collections::HashMap::new();
+    
+    // Fetch from all registries in parallel
+    let fetch_tasks: Vec<_> = urls.into_iter().map(|url| {
+        let mut discovery = PluginDiscovery::new(url);
+        async move {
+            discovery.get_registry().await
+        }
+    }).collect();
+    
+    let results = join_all(fetch_tasks).await;
+    
+    // Merge plugins from all registries
+    // If a plugin appears in multiple registries, keep the one with the highest version
+    for result in results {
+        match result {
+            Ok(registry) => {
+                for plugin in registry.plugins {
+                    let plugin_info = RegistryPluginInfo {
+                        id: plugin.id.clone(),
+                        name: plugin.name,
+                        author: plugin.author,
+                        repository: plugin.repository,
+                        latest_version: plugin.latest_version.clone(),
+                        description: plugin.description,
+                        category: plugin.category,
+                        verified: plugin.verified,
+                        downloads: plugin.downloads,
+                        tags: plugin.tags,
+                        license: plugin.license,
+                        min_core_version: plugin.min_core_version,
+                        max_core_version: plugin.max_core_version,
+                        api_version: plugin.api_version,
+                    };
+                    
+                    // Check if we already have this plugin
+                    match all_plugins.get(&plugin.id) {
+                        Some(existing) => {
+                            // Keep the one with the highest version
+                            if compare_versions(&plugin.latest_version, &existing.latest_version) > 0 {
+                                all_plugins.insert(plugin.id, plugin_info);
+                            }
+                        }
+                        None => {
+                            all_plugins.insert(plugin.id, plugin_info);
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                // Log error but continue with other registries
+                eprintln!("Warning: Failed to fetch registry: {}", e);
+            }
+        }
+    }
+    
+    Ok(all_plugins.into_values().collect())
+}
+
+/// Simple version comparison (assumes semver format)
+fn compare_versions(v1: &str, v2: &str) -> i32 {
+    let v1_parts: Vec<u32> = v1.split('.').filter_map(|s| s.parse().ok()).collect();
+    let v2_parts: Vec<u32> = v2.split('.').filter_map(|s| s.parse().ok()).collect();
+    
+    for (i, &v1_part) in v1_parts.iter().enumerate() {
+        let v2_part = v2_parts.get(i).copied().unwrap_or(0);
+        if v1_part > v2_part {
+            return 1;
+        } else if v1_part < v2_part {
+            return -1;
+        }
+    }
+    
+    if v1_parts.len() < v2_parts.len() {
+        -1
+    } else if v1_parts.len() > v2_parts.len() {
+        1
+    } else {
+        0
+    }
+}
+
+/// Get plugin registry from remote source(s)
 #[tauri::command]
-pub async fn search_plugins(query: String) -> Result<Vec<RegistryPluginInfo>, String> {
-    let registry_url = "https://raw.githubusercontent.com/bthos/time-tracker-plugins-registry/main/registry.json";
-    let mut discovery = PluginDiscovery::new(registry_url.to_string());
+pub async fn get_plugin_registry(state: State<'_, AppState>) -> Result<Vec<RegistryPluginInfo>, String> {
+    let registry_urls = get_registry_urls(&state)?;
+    fetch_plugins_from_registries(registry_urls).await
+}
+
+/// Search plugins in registry(ies)
+#[tauri::command]
+pub async fn search_plugins(state: State<'_, AppState>, query: String) -> Result<Vec<RegistryPluginInfo>, String> {
+    let registry_urls = get_registry_urls(&state)?;
+    let all_plugins = fetch_plugins_from_registries(registry_urls).await?;
     
-    let plugins = discovery.search_plugins(&query).await?;
+    let query_lower = query.to_lowercase();
+    let filtered: Vec<RegistryPluginInfo> = all_plugins
+        .into_iter()
+        .filter(|plugin| {
+            plugin.name.to_lowercase().contains(&query_lower)
+                || plugin.description.to_lowercase().contains(&query_lower)
+                || plugin.id.to_lowercase().contains(&query_lower)
+                || plugin.tags.as_ref().map_or(false, |tags| {
+                    tags.iter().any(|tag| tag.to_lowercase().contains(&query_lower))
+                })
+        })
+        .collect();
     
-    Ok(plugins.into_iter().map(|p| RegistryPluginInfo {
-        id: p.id,
-        name: p.name,
-        author: p.author,
-        repository: p.repository,
-        latest_version: p.latest_version,
-        description: p.description,
-        category: p.category,
-        verified: p.verified,
-        downloads: p.downloads,
-        tags: p.tags,
-        license: p.license,
-        min_core_version: p.min_core_version,
-        max_core_version: p.max_core_version,
-        api_version: p.api_version,
-    }).collect())
+    Ok(filtered)
 }
 
 /// Get plugin info from repository URL
@@ -1421,32 +1526,17 @@ pub async fn get_plugin_info(repository_url: String) -> Result<serde_json::Value
 
 /// Discover plugin from repository URL
 #[tauri::command]
-pub async fn discover_plugin(repository_url: String) -> Result<RegistryPluginInfo, String> {
-    let registry_url = "https://raw.githubusercontent.com/bthos/time-tracker-plugins-registry/main/registry.json";
-    let mut discovery = PluginDiscovery::new(registry_url.to_string());
+pub async fn discover_plugin(state: State<'_, AppState>, repository_url: String) -> Result<RegistryPluginInfo, String> {
+    let registry_urls = get_registry_urls(&state)?;
+    let all_plugins = fetch_plugins_from_registries(registry_urls).await?;
     
-    // Try to find in registry first
-    let registry = discovery.get_registry().await?;
-    if let Some(plugin) = registry.plugins.into_iter().find(|p| p.repository == repository_url) {
-        return Ok(RegistryPluginInfo {
-            id: plugin.id,
-            name: plugin.name,
-            author: plugin.author,
-            repository: plugin.repository,
-            latest_version: plugin.latest_version,
-            description: plugin.description,
-            category: plugin.category,
-            verified: plugin.verified,
-            downloads: plugin.downloads,
-            tags: plugin.tags,
-            license: plugin.license,
-            min_core_version: plugin.min_core_version,
-            max_core_version: plugin.max_core_version,
-            api_version: plugin.api_version,
-        });
+    // Try to find in registries first
+    if let Some(plugin) = all_plugins.into_iter().find(|p| p.repository == repository_url) {
+        return Ok(plugin);
     }
     
     // If not in registry, fetch manifest directly
+    let discovery = PluginDiscovery::new("".to_string());
     let manifest = discovery.get_plugin_manifest(&repository_url).await?;
     
     // Extract plugin ID from repository URL

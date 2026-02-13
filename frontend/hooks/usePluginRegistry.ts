@@ -1,7 +1,15 @@
 import { useState, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/tauri';
 import type { RegistryPlugin, PluginManifest } from '../types/plugin';
 import { handleApiError } from '../utils/toast';
+import { isTauriAvailable } from '../utils/tauri';
+
+const invoke = async <T>(cmd: string, args?: Record<string, unknown>): Promise<T> => {
+  if (!isTauriAvailable()) {
+    throw new Error('This feature requires the desktop application. Please use the Tauri desktop app.');
+  }
+  const { invoke: tauriInvoke } = await import('@tauri-apps/api/tauri');
+  return tauriInvoke<T>(cmd, args);
+};
 
 export function usePluginRegistry() {
   const [plugins, setPlugins] = useState<RegistryPlugin[]>([]);
@@ -12,6 +20,10 @@ export function usePluginRegistry() {
     try {
       setIsLoading(true);
       setError(null);
+      if (!isTauriAvailable()) {
+        setError('Plugin registry requires the desktop application.');
+        return;
+      }
       const result = await invoke<RegistryPlugin[]>('get_plugin_registry');
       setPlugins(result);
     } catch (err) {
