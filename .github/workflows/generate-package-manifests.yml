@@ -735,35 +735,10 @@ jobs:
 
       - name: Determine fork repository
         id: winget_fork
-        env:
-          GITHUB_TOKEN: ${{ secrets.PACKAGE_MANAGER_PAT || secrets.GITHUB_TOKEN }}
-        run: |
-          if [ -n "${{ github.event.inputs.fork_owner }}" ]; then
-            FORK_OWNER="${{ github.event.inputs.fork_owner }}"
-          elif [ -n "${{ secrets.PACKAGE_MANAGER_PAT }}" ]; then
-            # Get username from PAT token
-            USER_INFO=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
-              -H "Accept: application/vnd.github.v3+json" \
-              "https://api.github.com/user")
-            FORK_OWNER=$(echo "$USER_INFO" | jq -r '.login')
-          else
-            FORK_OWNER="${{ github.repository_owner }}"
-          fi
-          echo "fork_owner=$FORK_OWNER" >> $GITHUB_OUTPUT
-          echo "Using fork owner: $FORK_OWNER"
-          
-          # Check if fork exists
-          FORK_CHECK=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: token $GITHUB_TOKEN" \
-            -H "Accept: application/vnd.github.v3+json" \
-            "https://api.github.com/repos/$FORK_OWNER/winget-pkgs")
-          
-          if [ "$FORK_CHECK" != "200" ]; then
-            echo "::error::Fork repository $FORK_OWNER/winget-pkgs does not exist!"
-            echo "::error::Please create a fork of microsoft/winget-pkgs at: https://github.com/microsoft/winget-pkgs/fork"
-            echo "::error::Or specify a different fork_owner in workflow inputs"
-            exit 1
-          fi
-          echo "✅ Fork repository $FORK_OWNER/winget-pkgs exists"
+        uses: ./.github/actions/determine-fork-owner
+        with:
+          fork_repo: winget-pkgs
+          fork_url: https://github.com/microsoft/winget-pkgs/fork
 
       - name: Get default branch
         id: get_default_branch_winget
@@ -795,26 +770,7 @@ jobs:
 
       - name: Get version
         id: get_version
-        run: |
-          if [ -n "${{ github.event.inputs.version }}" ]; then
-            VERSION="${{ github.event.inputs.version }}"
-            VERSION=${VERSION#v}
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
-            echo "tag=v$VERSION" >> $GITHUB_OUTPUT
-          elif [ "${{ github.event_name }}" == "release" ]; then
-            TAG="${{ github.event.release.tag_name }}"
-            VERSION=${TAG#v}
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
-            echo "tag=$TAG" >> $GITHUB_OUTPUT
-          else
-            LATEST_RELEASE=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-              -H "Accept: application/vnd.github.v3+json" \
-              "https://api.github.com/repos/${{ github.repository }}/releases/latest")
-            LATEST_TAG=$(echo "$LATEST_RELEASE" | jq -r '.tag_name')
-            VERSION=${LATEST_TAG#v}
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
-            echo "tag=$LATEST_TAG" >> $GITHUB_OUTPUT
-          fi
+        uses: ./.github/actions/get-version
 
       - name: Create branch and copy manifests
         id: create_branch
@@ -855,93 +811,32 @@ jobs:
           echo "branch=$BRANCH_NAME" >> $GITHUB_OUTPUT
 
       - name: Create Pull Request
-        env:
-          GITHUB_TOKEN: ${{ secrets.PACKAGE_MANAGER_PAT || secrets.GITHUB_TOKEN }}
-        run: |
-          VERSION="${{ steps.get_version.outputs.version }}"
-          BRANCH="${{ steps.create_branch.outputs.branch }}"
-          
-          PR_BODY=$(cat <<EOF
-          ## Description
-          This PR adds TimeTracker version $VERSION to the WinGet repository.
-          
-          ## Changes
-          - Added manifests for TimeTracker $VERSION
-          - Installer: MSI package
-          - Architecture: x64
-          
-          ## Checklist
-          - [x] Manifest files are correctly formatted
-          - [x] Installer URL is valid and accessible
-          - [x] SHA256 checksum is correct
-          - [x] Silent install switches are configured
-          
-          ## Related
-          Release: https://github.com/${{ github.repository }}/releases/tag/${{ steps.get_version.outputs.tag }}
-          EOF
-          )
-          
-          # Determine fork owner for PR head
-          FORK_OWNER="${{ steps.winget_fork.outputs.fork_owner }}"
-          HEAD_BRANCH="$FORK_OWNER:$BRANCH"
-          BASE_BRANCH="${{ steps.get_default_branch_winget.outputs.default_branch }}"
-          
-          echo "Creating PR with:"
-          echo "  Head: $HEAD_BRANCH"
-          echo "  Base: $BASE_BRANCH"
-          echo "  Title: Add TimeTracker version $VERSION"
-          
-          # Create PR payload (without labels - they require special permissions)
-          PR_PAYLOAD=$(jq -n \
-            --arg title "Add TimeTracker version $VERSION" \
-            --arg head "$HEAD_BRANCH" \
-            --arg base "$BASE_BRANCH" \
-            --arg body "$PR_BODY" \
-            '{title: $title, head: $head, base: $base, body: $body}')
-          
-          # Create PR using GitHub API
-          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
-            -H "Authorization: token $GITHUB_TOKEN" \
-            -H "Accept: application/vnd.github.v3+json" \
-            -H "Content-Type: application/json" \
-            https://api.github.com/repos/microsoft/winget-pkgs/pulls \
-            -d "$PR_PAYLOAD")
-          
-          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-          BODY=$(echo "$RESPONSE" | sed '$d')
-          
-          echo "Response HTTP code: $HTTP_CODE"
-          
-          if [ "$HTTP_CODE" -eq 201 ]; then
-            PR_URL=$(echo "$BODY" | jq -r '.html_url')
-            echo "✅ Pull Request created successfully: $PR_URL"
-          elif [ "$HTTP_CODE" -eq 422 ]; then
-            echo "::warning::PR creation failed with validation error"
-            echo "Response body:"
-            echo "$BODY" | jq '.' || echo "$BODY"
+        id: create_pr
+        uses: ./.github/actions/create-pull-request
+        with:
+          github_token: ${{ secrets.PACKAGE_MANAGER_PAT || secrets.GITHUB_TOKEN }}
+          fork_owner: ${{ steps.winget_fork.outputs.fork_owner }}
+          branch: ${{ steps.create_branch.outputs.branch }}
+          base_branch: ${{ steps.get_default_branch_winget.outputs.default_branch }}
+          target_repo: microsoft/winget-pkgs
+          title: Add TimeTracker version ${{ steps.get_version.outputs.version }}
+          body: |
+            ## Description
+            This PR adds TimeTracker version ${{ steps.get_version.outputs.version }} to the WinGet repository.
             
-            # Try to extract specific error messages
-            ERRORS=$(echo "$BODY" | jq -r '.errors[]?.message // .message // "Unknown validation error"' 2>/dev/null || echo "Unknown error")
-            echo "::warning::Error details: $ERRORS"
+            ## Changes
+            - Added manifests for TimeTracker ${{ steps.get_version.outputs.version }}
+            - Installer: MSI package
+            - Architecture: x64
             
-            # Check if PR already exists
-            EXISTING_PR=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
-              -H "Accept: application/vnd.github.v3+json" \
-              "https://api.github.com/repos/microsoft/winget-pkgs/pulls?head=$HEAD_BRANCH&state=open" | jq -r '.[0].html_url // empty')
+            ## Checklist
+            - [x] Manifest files are correctly formatted
+            - [x] Installer URL is valid and accessible
+            - [x] SHA256 checksum is correct
+            - [x] Silent install switches are configured
             
-            if [ -n "$EXISTING_PR" ]; then
-              echo "::info::PR already exists: $EXISTING_PR"
-            else
-              echo "::warning::Branch was created: $BRANCH"
-              BASE_BRANCH="${{ steps.get_default_branch_winget.outputs.default_branch }}"
-              echo "::warning::You can manually create PR at: https://github.com/microsoft/winget-pkgs/compare/$BASE_BRANCH...$HEAD_BRANCH"
-            fi
-          else
-            echo "::error::Failed to create PR. HTTP $HTTP_CODE"
-            echo "Response body:"
-            echo "$BODY" | jq '.' || echo "$BODY"
-            exit 1
-          fi
+            ## Related
+            Release: https://github.com/${{ github.repository }}/releases/tag/${{ steps.get_version.outputs.tag }}
 
   create-homebrew-pr:
     # DISABLED: Homebrew Cask requires signed and notarized DMG files
@@ -984,35 +879,10 @@ jobs:
 
       - name: Determine fork repository
         id: homebrew_fork
-        env:
-          GITHUB_TOKEN: ${{ secrets.PACKAGE_MANAGER_PAT || secrets.GITHUB_TOKEN }}
-        run: |
-          if [ -n "${{ github.event.inputs.fork_owner }}" ]; then
-            FORK_OWNER="${{ github.event.inputs.fork_owner }}"
-          elif [ -n "${{ secrets.PACKAGE_MANAGER_PAT }}" ]; then
-            # Get username from PAT token
-            USER_INFO=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
-              -H "Accept: application/vnd.github.v3+json" \
-              "https://api.github.com/user")
-            FORK_OWNER=$(echo "$USER_INFO" | jq -r '.login')
-          else
-            FORK_OWNER="${{ github.repository_owner }}"
-          fi
-          echo "fork_owner=$FORK_OWNER" >> $GITHUB_OUTPUT
-          echo "Using fork owner: $FORK_OWNER"
-          
-          # Check if fork exists
-          FORK_CHECK=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: token $GITHUB_TOKEN" \
-            -H "Accept: application/vnd.github.v3+json" \
-            "https://api.github.com/repos/$FORK_OWNER/homebrew-cask")
-          
-          if [ "$FORK_CHECK" != "200" ]; then
-            echo "::error::Fork repository $FORK_OWNER/homebrew-cask does not exist!"
-            echo "::error::Please create a fork of homebrew/homebrew-cask at: https://github.com/homebrew/homebrew-cask/fork"
-            echo "::error::Or specify a different fork_owner in workflow inputs"
-            exit 1
-          fi
-          echo "✅ Fork repository $FORK_OWNER/homebrew-cask exists"
+        uses: ./.github/actions/determine-fork-owner
+        with:
+          fork_repo: homebrew-cask
+          fork_url: https://github.com/homebrew/homebrew-cask/fork
 
       - name: Get default branch
         id: get_default_branch
@@ -1044,26 +914,7 @@ jobs:
 
       - name: Get version
         id: get_version
-        run: |
-          if [ -n "${{ github.event.inputs.version }}" ]; then
-            VERSION="${{ github.event.inputs.version }}"
-            VERSION=${VERSION#v}
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
-            echo "tag=v$VERSION" >> $GITHUB_OUTPUT
-          elif [ "${{ github.event_name }}" == "release" ]; then
-            TAG="${{ github.event.release.tag_name }}"
-            VERSION=${TAG#v}
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
-            echo "tag=$TAG" >> $GITHUB_OUTPUT
-          else
-            LATEST_RELEASE=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-              -H "Accept: application/vnd.github.v3+json" \
-              "https://api.github.com/repos/${{ github.repository }}/releases/latest")
-            LATEST_TAG=$(echo "$LATEST_RELEASE" | jq -r '.tag_name')
-            VERSION=${LATEST_TAG#v}
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
-            echo "tag=$LATEST_TAG" >> $GITHUB_OUTPUT
-          fi
+        uses: ./.github/actions/get-version
 
       - name: Check if cask already exists
         id: check_cask
@@ -1111,91 +962,29 @@ jobs:
           echo "commit_msg=$COMMIT_MSG" >> $GITHUB_OUTPUT
 
       - name: Create Pull Request
-        env:
-          GITHUB_TOKEN: ${{ secrets.PACKAGE_MANAGER_PAT || secrets.GITHUB_TOKEN }}
-        run: |
-          VERSION="${{ steps.get_version.outputs.version }}"
-          BRANCH="${{ steps.create_cask.outputs.branch }}"
-          COMMIT_MSG="${{ steps.create_cask.outputs.commit_msg }}"
-          
-          PR_BODY=$(cat <<EOF
-          ## Description
-          $COMMIT_MSG.
-          
-          ## Changes
-          - Version: $VERSION
-          - SHA256: Verified
-          - URL: Direct download from GitHub Releases
-          
-          ## Checklist
-          - [x] Cask file is correctly formatted
-          - [x] SHA256 checksum is correct
-          - [x] URL is valid and accessible
-          - [x] App bundle name is correct
-          
-          ## Related
-          Release: https://github.com/${{ github.repository }}/releases/tag/${{ steps.get_version.outputs.tag }}
-          EOF
-          )
-          
-          # Determine fork owner for PR head
-          FORK_OWNER="${{ steps.homebrew_fork.outputs.fork_owner }}"
-          HEAD_BRANCH="$FORK_OWNER:$BRANCH"
-          BASE_BRANCH="${{ steps.get_default_branch.outputs.default_branch }}"
-          
-          echo "Creating PR with:"
-          echo "  Head: $HEAD_BRANCH"
-          echo "  Base: $BASE_BRANCH"
-          echo "  Title: $COMMIT_MSG"
-          
-          # Create PR payload (without labels - they require special permissions)
-          PR_PAYLOAD=$(jq -n \
-            --arg title "$COMMIT_MSG" \
-            --arg head "$HEAD_BRANCH" \
-            --arg base "$BASE_BRANCH" \
-            --arg body "$PR_BODY" \
-            '{title: $title, head: $head, base: $base, body: $body}')
-          
-          # Create PR using GitHub API
-          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
-            -H "Authorization: token $GITHUB_TOKEN" \
-            -H "Accept: application/vnd.github.v3+json" \
-            -H "Content-Type: application/json" \
-            https://api.github.com/repos/homebrew/homebrew-cask/pulls \
-            -d "$PR_PAYLOAD")
-          
-          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-          BODY=$(echo "$RESPONSE" | sed '$d')
-          
-          echo "Response HTTP code: $HTTP_CODE"
-          
-          if [ "$HTTP_CODE" -eq 201 ]; then
-            PR_URL=$(echo "$BODY" | jq -r '.html_url')
-            echo "✅ Pull Request created successfully: $PR_URL"
-          elif [ "$HTTP_CODE" -eq 422 ]; then
-            echo "::warning::PR creation failed with validation error"
-            echo "Response body:"
-            echo "$BODY" | jq '.' || echo "$BODY"
+        id: create_pr
+        uses: ./.github/actions/create-pull-request
+        with:
+          github_token: ${{ secrets.PACKAGE_MANAGER_PAT || secrets.GITHUB_TOKEN }}
+          fork_owner: ${{ steps.homebrew_fork.outputs.fork_owner }}
+          branch: ${{ steps.create_cask.outputs.branch }}
+          base_branch: ${{ steps.get_default_branch.outputs.default_branch }}
+          target_repo: homebrew/homebrew-cask
+          title: ${{ steps.create_cask.outputs.commit_msg }}
+          body: |
+            ## Description
+            ${{ steps.create_cask.outputs.commit_msg }}.
             
-            # Try to extract specific error messages
-            ERRORS=$(echo "$BODY" | jq -r '.errors[]?.message // .message // "Unknown validation error"' 2>/dev/null || echo "Unknown error")
-            echo "::warning::Error details: $ERRORS"
+            ## Changes
+            - Version: ${{ steps.get_version.outputs.version }}
+            - SHA256: Verified
+            - URL: Direct download from GitHub Releases
             
-            # Check if PR already exists
-            EXISTING_PR=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
-              -H "Accept: application/vnd.github.v3+json" \
-              "https://api.github.com/repos/homebrew/homebrew-cask/pulls?head=$HEAD_BRANCH&state=open" | jq -r '.[0].html_url // empty')
+            ## Checklist
+            - [x] Cask file is correctly formatted
+            - [x] SHA256 checksum is correct
+            - [x] URL is valid and accessible
+            - [x] App bundle name is correct
             
-            if [ -n "$EXISTING_PR" ]; then
-              echo "::info::PR already exists: $EXISTING_PR"
-            else
-              echo "::warning::Branch was created: $BRANCH"
-              BASE_BRANCH="${{ steps.get_default_branch.outputs.default_branch }}"
-              echo "::warning::You can manually create PR at: https://github.com/homebrew/homebrew-cask/compare/$BASE_BRANCH...$HEAD_BRANCH"
-            fi
-          else
-            echo "::error::Failed to create PR. HTTP $HTTP_CODE"
-            echo "Response body:"
-            echo "$BODY" | jq '.' || echo "$BODY"
-            exit 1
-          fi
+            ## Related
+            Release: https://github.com/${{ github.repository }}/releases/tag/${{ steps.get_version.outputs.tag }}

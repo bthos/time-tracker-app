@@ -5,6 +5,7 @@ import { useActivities } from '../../hooks';
 import { useCategories } from '../../hooks/useCategories';
 import LoadingSpinner from '../Common/LoadingSpinner';
 import { differenceInCalendarDays, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
+import type { Category } from '../../types';
 
 export default function DailyTrend() {
   // Use selector to get only primitive values to prevent re-renders from object reference changes
@@ -97,7 +98,7 @@ export default function DailyTrend() {
       const dateKey = activityDate.toISOString().split('T')[0];
       
       if (days[dateKey]) {
-        const category = allCategories.find(c => c.id === activity.category_id);
+        const category = allCategories.find((c: Category) => c.id === activity.category_id);
         const duration = activity.duration_sec;
         
         days[dateKey].total += duration;

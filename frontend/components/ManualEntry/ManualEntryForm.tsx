@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../../store';
-import { ManualEntry as ManualEntryType } from '../../types';
+import { ManualEntry as ManualEntryType, Category } from '../../types';
 import { formatDuration } from '../../utils/format';
 import Button from '../Common/Button';
-import { api } from '../../services/api';
+import { manualEntriesApi } from '../../services/api/manualEntries';
 import { usePinnedCategories } from '../../hooks/useCategories';
 import { X, Save } from 'lucide-react';
 
@@ -65,12 +65,12 @@ const ManualEntryForm: React.FC<ManualEntryFormProps> = ({ isOpen, onClose, edit
       };
       
       if (editEntry?.id) {
-        await api.manualEntries.updateManualEntry({
+        await manualEntriesApi.updateManualEntry({
           id: editEntry.id,
           ...entry,
         });
       } else {
-        await api.manualEntries.createManualEntry(entry);
+        await manualEntriesApi.createManualEntry(entry);
       }
       
       const { showSuccess } = await import('../../utils/toast');
@@ -125,7 +125,7 @@ const ManualEntryForm: React.FC<ManualEntryFormProps> = ({ isOpen, onClose, edit
                 Activity Type
               </label>
               <div className="flex flex-wrap gap-2">
-                {pinnedCategories.map((category) => (
+                {pinnedCategories.map((category: Category) => (
                   <button
                     key={category.id}
                     type="button"

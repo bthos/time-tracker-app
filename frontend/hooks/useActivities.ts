@@ -1,8 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
-import { api } from '../services/api';
+import { statsApi } from '../services/api/stats';
+import { activitiesApi } from '../services/api/activities';
+import { trackingApi } from '../services/api/tracking';
 import { useStore } from '../store';
-import type { TimelineBlock } from '../types';
+import type { TimelineBlock, StatsResponse } from '../types';
 
 // Helper function to add timeout to promises
 const withTimeout = <T>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
@@ -35,7 +37,7 @@ export function useActivities() {
   // Memoize date range calculation (reuse store helper)
   const normalizedRange = useMemo(
     () => useStore.getState().getDateRange(),
-    [dateRangePreset, customStartTimestamp, customEndTimestamp]
+    [dateRangePreset, customStartTimestamp, customEndTimestamp] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   const startTime = normalizedRange.start.getTime();
@@ -45,7 +47,7 @@ export function useActivities() {
   return useQuery({
     queryKey,
     queryFn: async () => {
-      return await withTimeout(api.activities.getActivities(normalizedRange), 10000); // 10 second timeout
+      return await withTimeout(activitiesApi.getActivities(normalizedRange), 10000); // 10 second timeout
     },
     retry: 1,
     retryDelay: 1000,
@@ -59,7 +61,7 @@ export function useDailyStats(date?: Date) {
   return useQuery({
     queryKey: ['dailyStats', targetDate.getTime()],
     queryFn: async () => {
-      return await withTimeout(api.stats.getDailyStats(targetDate), 10000); // 10 second timeout
+      return await withTimeout(statsApi.getDailyStats(targetDate), 10000); // 10 second timeout
     },
     retry: 1,
     retryDelay: 1000,
@@ -73,11 +75,11 @@ export function useStatsForRange(range: { start: Date; end: Date } | null) {
   const startTs = range?.start.getTime() ?? 0;
   const endTs = range?.end.getTime() ?? 0;
 
-  return useQuery({
+  return useQuery<StatsResponse>({
     queryKey: ['statsRange', startTs, endTs],
     queryFn: async () => {
       if (!range) throw new Error('No range');
-      return await withTimeout(api.stats.getStats(range), 10000);
+      return await withTimeout(statsApi.getStats(range), 10000);
     },
     enabled: Boolean(isMultiDay && range),
     retry: 1,
@@ -125,7 +127,7 @@ export function useUpdateActivityCategory() {
 
   return useMutation({
     mutationFn: ({ activityId, categoryId }: { activityId: number; categoryId: number }) =>
-      api.activities.updateActivityCategory(activityId, categoryId),
+      activitiesApi.updateActivityCategory(activityId, categoryId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['activities'] });
       queryClient.invalidateQueries({ queryKey: ['dailyStats'] });
@@ -140,7 +142,7 @@ export function useDeleteActivity() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: number) => api.activities.deleteActivity(id),
+    mutationFn: (id: number) => activitiesApi.deleteActivity(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['activities'] });
       queryClient.invalidateQueries({ queryKey: ['dailyStats'] });
@@ -154,7 +156,7 @@ export function useDeleteActivity() {
 export function useTodayTotal() {
   return useQuery({
     queryKey: ['todayTotal'],
-    queryFn: () => api.tracking.getTodayTotal(),
+    queryFn: () => trackingApi.getTodayTotal(),
     refetchInterval: 5000, // Refetch every 5 seconds to keep it updated
     retry: 1,
     retryDelay: 1000,

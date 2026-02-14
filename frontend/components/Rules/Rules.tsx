@@ -3,7 +3,7 @@ import { useRules } from '../../hooks/useRules';
 import { useCategories } from '../../hooks/useCategories';
 import Card from '../Common/Card';
 import Button from '../Common/Button';
-import { Rule } from '../../types';
+import { Rule, Category } from '../../types';
 
 export const Rules: React.FC = () => {
   const { rules, isLoading, createRule, deleteRule } = useRules();
@@ -45,7 +45,7 @@ export const Rules: React.FC = () => {
   };
 
   const getCategoryById = (id: number) => {
-    return categories.find(c => c.id === id);
+    return categories.find((c: Category) => c.id === id);
   };
 
   if (isLoading) {
@@ -104,7 +104,7 @@ export const Rules: React.FC = () => {
                 onChange={(e) => setNewRule({ ...newRule, category_id: parseInt(e.target.value) })}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               >
-                {categories.map(cat => (
+                {categories.map((cat: Category) => (
                   <option key={cat.id} value={cat.id}>
                     {cat.icon} {cat.name}
                   </option>
@@ -169,7 +169,7 @@ export const Rules: React.FC = () => {
             </div>
 
             {/* Rules */}
-            {rules.map((rule) => {
+            {rules.map((rule: Rule) => {
               const category = getCategoryById(rule.category_id);
               return (
                 <div

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, useEffect } from 'react';
+import { useMemo, useRef } from 'react';
 import { Activity, ManualEntry } from '../../types';
 import { formatDate } from '../../utils/format';
 import { HistoryItem } from './HistoryItem';
@@ -7,7 +7,7 @@ import { useTrackerStatus } from '../../hooks/useTracker';
 interface UseHistoryItemsOptions {
   activities: Activity[];
   manualEntries: ManualEntry[];
-  filter: 'all' | 'activities' | 'manual';
+  filter: 'all' | 'activities' | 'manual' | 'focus';
   currentTime: number;
 }
 

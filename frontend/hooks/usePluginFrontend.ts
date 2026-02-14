@@ -33,7 +33,7 @@ export function usePluginFrontend() {
   useEffect(() => {
     if (isLoading) return;
     
-    const updateSplashStatus = (window as any).updateSplashStatus;
+    const updateSplashStatus = (window as Window & { updateSplashStatus?: (status: string) => void }).updateSplashStatus;
     
     // Filter to only enabled plugins
     const enabledPlugins = plugins.filter((p: InstalledPlugin) => p.enabled);

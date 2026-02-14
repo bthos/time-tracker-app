@@ -26,7 +26,23 @@ import { windowApi } from './window';
 import { domainsApi } from './domains';
 
 // Combined API object for backward compatibility
-export const api = {
+export const api: {
+  activities: typeof activitiesApi;
+  categories: typeof categoriesApi;
+  rules: typeof rulesApi;
+  manualEntries: typeof manualEntriesApi;
+  settings: typeof settingsApi;
+  stats: typeof statsApi;
+  tracking: typeof trackingApi;
+  idle: typeof idleApi;
+  export: typeof exportApi;
+  window: typeof windowApi;
+  domains: typeof domainsApi;
+  getRules: typeof rulesApi.getRules;
+  createRule: typeof rulesApi.createRule;
+  updateRule: typeof rulesApi.updateRule;
+  deleteRule: typeof rulesApi.deleteRule;
+} = {
   activities: activitiesApi,
   categories: categoriesApi,
   rules: rulesApi,

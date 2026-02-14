@@ -8,7 +8,6 @@ interface HistoryDateHeaderProps {
 
 export const HistoryDateHeader: React.FC<HistoryDateHeaderProps> = ({
   date,
-  itemsCount,
   innerRef,
 }) => {
   const dateObj = new Date(date);

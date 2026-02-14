@@ -3,7 +3,8 @@ import { Package, Settings as SettingsIcon, Plus, Trash2 } from 'lucide-react';
 import { usePluginRegistry } from '../../hooks/usePluginRegistry';
 import { usePlugins } from '../../hooks/usePlugins';
 import { useSettings } from '../../hooks/useSettings';
-import { api } from '../../services/api';
+import { settingsApi } from '../../services/api/settings';
+import type { Settings } from '../../types';
 import PluginCard from './PluginCard';
 import PluginDetails from './PluginDetails';
 import PluginSearch from './PluginSearch';
@@ -29,9 +30,10 @@ export default function Marketplace() {
 
   useEffect(() => {
     if (settings) {
+      const typedSettings = settings as Settings;
       // Use plugin_registry_urls if available, otherwise use default
-      if (settings.plugin_registry_urls && settings.plugin_registry_urls.length > 0) {
-        setRegistryUrls([...settings.plugin_registry_urls]);
+      if (typedSettings.plugin_registry_urls && typedSettings.plugin_registry_urls.length > 0) {
+        setRegistryUrls([...typedSettings.plugin_registry_urls]);
       } else {
         setRegistryUrls(['https://raw.githubusercontent.com/tmtrckr/plugins-registry/main/registry.json']);
       }
@@ -84,8 +86,8 @@ export default function Marketplace() {
   const handleSaveRegistryUrls = async () => {
     try {
       setIsSavingRegistryUrls(true);
-      const currentSettings = await api.settings.getSettings();
-      await api.settings.updateSettings({
+      const currentSettings = await settingsApi.getSettings();
+      await settingsApi.updateSettings({
         ...currentSettings,
         plugin_registry_urls: registryUrls.length > 0 ? registryUrls : undefined,
       });

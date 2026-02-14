@@ -35,8 +35,8 @@ function App() {
 
   // Splash: wait only for settings (theme, etc.). Rest of data loads in-place with skeletons.
   useEffect(() => {
-    const updateSplashStatus = (window as any).updateSplashStatus;
-    const hideSplashScreen = (window as any).hideSplashScreen;
+    const updateSplashStatus = (window as Window & { updateSplashStatus?: (status: string) => void }).updateSplashStatus;
+    const hideSplashScreen = (window as Window & { hideSplashScreen?: () => void }).hideSplashScreen;
     if (!updateSplashStatus || !hideSplashScreen) return;
 
     if (settingsLoading) {
@@ -209,7 +209,7 @@ function App() {
         return <Reports />;
       case 'settings':
         return <Settings />;
-      case 'marketplace':
+      case 'marketplace': {
         // Check if marketplace is enabled
         const marketplaceEnabled = useStore.getState().settings.enable_marketplace ?? false;
         if (!marketplaceEnabled) {
@@ -218,6 +218,7 @@ function App() {
           return <Dashboard />;
         }
         return <Marketplace />;
+      }
       default:
         return <Dashboard />;
     }

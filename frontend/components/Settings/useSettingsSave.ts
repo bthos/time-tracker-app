@@ -2,7 +2,7 @@ import { useState, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useStore } from '../../store';
 import { Settings as SettingsType } from '../../types';
-import { api } from '../../services/api';
+import { settingsApi } from '../../services/api/settings';
 
 export function useSettingsSave() {
   const [isSaving, setIsSaving] = useState(false);
@@ -32,10 +32,10 @@ export function useSettingsSave() {
         plugin_registry_urls: localSettings.plugin_registry_urls,
       };
       
-      await api.settings.updateSettings(backendSettings);
+      await settingsApi.updateSettings(backendSettings);
       isEditingRef.current = false;
       
-      const updated = await api.settings.getSettings();
+      const updated = await settingsApi.getSettings();
       const currentSettings = useStore.getState().settings;
       const frontendSettings: SettingsType = {
         ...updated,

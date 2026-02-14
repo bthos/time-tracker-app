@@ -3,6 +3,7 @@ import { formatDuration } from '../../utils/format';
 import Button from '../Common/Button';
 import { usePinnedCategories } from '../../hooks/useCategories';
 import { Settings } from 'lucide-react';
+import type { Category } from '../../types';
 
 interface IdlePromptProps {
   durationMinutes: number;
@@ -62,7 +63,7 @@ const IdlePrompt: React.FC<IdlePromptProps> = ({ durationMinutes, onSubmit, onSk
             What were you doing?
           </p>
           <div className="grid grid-cols-3 gap-3">
-            {pinnedCategories.map((category) => (
+            {pinnedCategories.map((category: Category) => (
               <button
                 key={category.id}
                 onClick={() => setSelectedCategoryId(category.id)}

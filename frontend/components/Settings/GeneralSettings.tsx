@@ -37,7 +37,6 @@ export const GeneralSettings: React.FC<GeneralSettingsProps> = ({
           <Toggle
             checked={('minimizeToTray' in localSettings ? (localSettings as SettingsType & { minimizeToTray?: boolean }).minimizeToTray : undefined) ?? localSettings.minimize_to_tray}
             onChange={(checked) => {
-              const newSettings = { ...localSettings, minimizeToTray: checked, minimize_to_tray: checked };
               onSettingChange('minimizeToTray' as keyof SettingsType, checked as SettingsType[keyof SettingsType]);
             }}
             label="Minimize to Tray"
@@ -47,7 +46,6 @@ export const GeneralSettings: React.FC<GeneralSettingsProps> = ({
           <Toggle
             checked={('showNotifications' in localSettings ? (localSettings as SettingsType & { showNotifications?: boolean }).showNotifications : undefined) ?? localSettings.show_notifications}
             onChange={(checked) => {
-              const newSettings = { ...localSettings, showNotifications: checked, show_notifications: checked };
               onSettingChange('showNotifications' as keyof SettingsType, checked as SettingsType[keyof SettingsType]);
             }}
             label="Show Notifications"
@@ -179,7 +177,7 @@ export const GeneralSettings: React.FC<GeneralSettingsProps> = ({
             </label>
             <select
               value={localSettings.time_format || '24h'}
-              onChange={(e) => onSettingChange('time_format', e.target.value)}
+              onChange={(e) => onSettingChange('time_format', e.target.value as '12h' | '24h')}
               className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg 
                          bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             >

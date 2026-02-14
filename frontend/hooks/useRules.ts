@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '../services/api';
+import { rulesApi } from '../services/api/rules';
 
 export const useRules = () => {
   const queryClient = useQueryClient();
@@ -10,25 +10,25 @@ export const useRules = () => {
     error,
   } = useQuery({
     queryKey: ['rules'],
-    queryFn: api.getRules,
+    queryFn: rulesApi.getRules,
   });
 
   const createMutation = useMutation({
-    mutationFn: api.createRule,
+    mutationFn: rulesApi.createRule,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rules'] });
     },
   });
 
   const deleteMutation = useMutation({
-    mutationFn: api.deleteRule,
+    mutationFn: rulesApi.deleteRule,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rules'] });
     },
   });
 
   const updateMutation = useMutation({
-    mutationFn: api.rules.updateRule,
+    mutationFn: rulesApi.updateRule,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rules'] });
     },

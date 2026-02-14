@@ -4,7 +4,7 @@ import { format, subHours } from 'date-fns';
 import { useCreateManualEntry, useUpdateManualEntry } from '../../hooks';
 import { useStore } from '../../store';
 import { usePinnedCategories } from '../../hooks/useCategories';
-import type { ManualEntry } from '../../types';
+import type { ManualEntry, Category } from '../../types';
 import Button from '../Common/Button';
 
 interface ManualEntryModalProps {
@@ -118,7 +118,7 @@ export default function ManualEntryModal({ editEntry, onClose }: ManualEntryModa
                 Activity Type
               </label>
               <div className="flex flex-wrap gap-2">
-                {pinnedCategories.map((category) => (
+                {pinnedCategories.map((category: Category) => (
                   <button
                     key={category.id}
                     type="button"

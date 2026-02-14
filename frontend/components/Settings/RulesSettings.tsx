@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Rule } from '../../types';
+import { Rule, Category } from '../../types';
 import Button from '../Common/Button';
 import { Check, X, Trash2, Edit2, RotateCcw } from 'lucide-react';
 import { useRules } from '../../hooks/useRules';
 import { useStore } from '../../store';
-import { api } from '../../services/api';
+import { activitiesApi } from '../../services/api/activities';
 import { useQueryClient } from '@tanstack/react-query';
 
 export const RulesSettings: React.FC = () => {
@@ -178,7 +178,7 @@ export const RulesSettings: React.FC = () => {
     if (confirm('Reapply rules to all existing records? This will update categories for all activities.')) {
       try {
         setIsReapplyingRules(true);
-        await api.activities.reapplyCategorizationRules();
+        await activitiesApi.reapplyCategorizationRules();
         const { showSuccess } = await import('../../utils/toast');
         showSuccess('Rules successfully applied to all records');
         queryClient.invalidateQueries({ queryKey: ['activities'] });
@@ -365,8 +365,8 @@ export const RulesSettings: React.FC = () => {
           </div>
         ) : (
           <div className="space-y-3">
-            {rules.map((rule) => {
-              const category = categories.find(c => c.id === rule.category_id);
+            {rules.map((rule: Rule) => {
+              const category = categories.find((c: Category) => c.id === rule.category_id);
               return (
                 <div key={rule.id}>
                   {editingRuleId === rule.id ? (

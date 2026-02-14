@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useStore } from '../../store';
 import { Activity, ManualEntry } from '../../types';
 import { useActivities, useManualEntries, useDeleteActivity, useDeleteManualEntry } from '../../hooks';
-import { useTrackerStatus } from '../../hooks/useTracker';
 import { SkeletonLoader } from '../Common/SkeletonLoader';
 import { HistoryFilters } from './HistoryFilters';
 import { HistoryList } from './HistoryList';

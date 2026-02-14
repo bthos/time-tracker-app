@@ -45,7 +45,7 @@ export const Categories: React.FC = () => {
   };
 
   const handleDelete = async (id: number) => {
-    const category = categories.find(c => c.id === id);
+    const category = categories.find((c: Category) => c.id === id);
     if (category?.is_system) {
       alert('Cannot delete system category. System categories are required for app functionality.');
       return;
@@ -177,7 +177,7 @@ export const Categories: React.FC = () => {
           )}
 
           {/* Categories List */}
-          {categories.map((category) => (
+          {categories.map((category: Category) => (
             <div
               key={category.id}
               className="grid grid-cols-12 gap-4 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg items-center transition-colors"

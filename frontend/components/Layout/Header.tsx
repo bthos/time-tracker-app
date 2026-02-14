@@ -4,8 +4,9 @@ import { useStore } from '../../store';
 import DateRangeSelector from './DateRangeSelector';
 import { useStartThinkingMode, useStopThinkingMode, usePauseTracking, useResumeTracking } from '../../hooks/useTracker';
 import { handleApiError, showSuccess } from '../../utils/toast';
-import { api } from '../../services/api';
+import { manualEntriesApi } from '../../services/api/manualEntries';
 import { exportData } from '../../utils/export';
+import type { Category } from '../../types';
 
 interface HeaderProps {
   onAddEntry: () => void;
@@ -27,7 +28,7 @@ export default function Header({ onAddEntry, onMenuClick }: HeaderProps) {
 
   // Find break category for pause functionality
   const breakCategoryId = useMemo(() => {
-    const breakCategory = categories.find(c => 
+    const breakCategory = categories.find((c: Category) => 
       c.name.toLowerCase() === 'break' || 
       c.name.toLowerCase() === 'pause'
     );
@@ -47,7 +48,7 @@ export default function Header({ onAddEntry, onMenuClick }: HeaderProps) {
         // Если Pause активен, выключаем его перед включением Thinking mode
         if (isTrackingPaused) {
           try {
-            await api.manualEntries.stopManualEntry();
+            await manualEntriesApi.stopManualEntry();
           } catch (error) {
             // Игнорируем ошибку, если нет активной manual entry
           }
@@ -77,7 +78,7 @@ export default function Header({ onAddEntry, onMenuClick }: HeaderProps) {
         } else {
           // Останавливаем break entry и возобновляем трекинг
           try {
-            await api.manualEntries.stopManualEntry();
+            await manualEntriesApi.stopManualEntry();
           } catch (error) {
             // Игнорируем ошибку, если нет активной manual entry
           }
@@ -93,7 +94,7 @@ export default function Header({ onAddEntry, onMenuClick }: HeaderProps) {
         }
         // Создаем break entry для отслеживания времени паузы
         if (breakCategoryId) {
-          await api.manualEntries.startManualEntry(breakCategoryId, 'Pause');
+          await manualEntriesApi.startManualEntry(breakCategoryId, 'Pause');
           await pauseTracking.mutateAsync();
           setIsTrackingPaused(true);
           showSuccess('Tracking paused');

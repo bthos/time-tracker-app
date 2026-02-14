@@ -1,0 +1,35 @@
+name: 'Get Version'
+description: 'Extract version from workflow inputs, release event, or latest release'
+outputs:
+  version:
+    description: 'Version number without v prefix'
+    value: ${{ steps.get_version.outputs.version }}
+  tag:
+    description: 'Full tag name with v prefix'
+    value: ${{ steps.get_version.outputs.tag }}
+runs:
+  using: 'composite'
+  steps:
+    - name: Get version
+      id: get_version
+      shell: bash
+      run: |
+        if [ -n "${{ github.event.inputs.version }}" ]; then
+          VERSION="${{ github.event.inputs.version }}"
+          VERSION=${VERSION#v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+        elif [ "${{ github.event_name }}" == "release" ]; then
+          TAG="${{ github.event.release.tag_name }}"
+          VERSION=${TAG#v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+        else
+          LATEST_RELEASE=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/latest")
+          LATEST_TAG=$(echo "$LATEST_RELEASE" | jq -r '.tag_name')
+          VERSION=${LATEST_TAG#v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=$LATEST_TAG" >> $GITHUB_OUTPUT
+        fi

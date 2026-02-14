@@ -1,0 +1,48 @@
+name: 'Determine Fork Owner'
+description: 'Determine fork owner from inputs, PAT token, or repository owner'
+inputs:
+  fork_repo:
+    description: 'Fork repository name (e.g., winget-pkgs or homebrew-cask)'
+    required: true
+  fork_url:
+    description: 'URL to create fork (for error messages)'
+    required: true
+outputs:
+  fork_owner:
+    description: 'GitHub username who owns the fork'
+    value: ${{ steps.determine_fork.outputs.fork_owner }}
+runs:
+  using: 'composite'
+  steps:
+    - name: Determine fork repository
+      id: determine_fork
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ secrets.PACKAGE_MANAGER_PAT || secrets.GITHUB_TOKEN }}
+      run: |
+        if [ -n "${{ github.event.inputs.fork_owner }}" ]; then
+          FORK_OWNER="${{ github.event.inputs.fork_owner }}"
+        elif [ -n "${{ secrets.PACKAGE_MANAGER_PAT }}" ]; then
+          # Get username from PAT token
+          USER_INFO=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/user")
+          FORK_OWNER=$(echo "$USER_INFO" | jq -r '.login')
+        else
+          FORK_OWNER="${{ github.repository_owner }}"
+        fi
+        echo "fork_owner=$FORK_OWNER" >> $GITHUB_OUTPUT
+        echo "Using fork owner: $FORK_OWNER"
+        
+        # Check if fork exists
+        FORK_CHECK=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: token $GITHUB_TOKEN" \
+          -H "Accept: application/vnd.github.v3+json" \
+          "https://api.github.com/repos/$FORK_OWNER/${{ inputs.fork_repo }}")
+        
+        if [ "$FORK_CHECK" != "200" ]; then
+          echo "::error::Fork repository $FORK_OWNER/${{ inputs.fork_repo }} does not exist!"
+          echo "::error::Please create a fork at: ${{ inputs.fork_url }}"
+          echo "::error::Or specify a different fork_owner in workflow inputs"
+          exit 1
+        fi
+        echo "✅ Fork repository $FORK_OWNER/${{ inputs.fork_repo }} exists"

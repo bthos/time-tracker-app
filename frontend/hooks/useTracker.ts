@@ -1,10 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '../services/api';
+import { trackingApi } from '../services/api/tracking';
 
 export function useTrackerStatus() {
   return useQuery({
     queryKey: ['trackerStatus'],
-    queryFn: () => api.tracking.getTrackingStatus(),
+    queryFn: () => trackingApi.getTrackingStatus(),
     refetchInterval: 5000, // Refresh every 5 seconds
   });
 }
@@ -13,7 +13,7 @@ export function usePauseTracking() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: () => api.tracking.pauseTracking(),
+    mutationFn: () => trackingApi.pauseTracking(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['trackerStatus'] });
     },
@@ -24,7 +24,7 @@ export function useResumeTracking() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: () => api.tracking.resumeTracking(),
+    mutationFn: () => trackingApi.resumeTracking(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['trackerStatus'] });
     },
@@ -35,7 +35,7 @@ export function useStartThinkingMode() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: () => api.tracking.startThinkingMode(),
+    mutationFn: () => trackingApi.startThinkingMode(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['trackerStatus'] });
       queryClient.invalidateQueries({ queryKey: ['activities'] });
@@ -47,7 +47,7 @@ export function useStopThinkingMode() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: () => api.tracking.stopThinkingMode(),
+    mutationFn: () => trackingApi.stopThinkingMode(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['trackerStatus'] });
       queryClient.invalidateQueries({ queryKey: ['activities'] });

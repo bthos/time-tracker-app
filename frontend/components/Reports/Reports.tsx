@@ -7,6 +7,7 @@ import { exportData } from '../../utils/export';
 import { SkeletonCard, SkeletonLoader } from '../Common/SkeletonLoader';
 import { Filter, X } from 'lucide-react';
 import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
+import type { Activity, Category } from '../../types';
 type TimePeriod = 'today' | 'week' | 'month';
 
 export const Reports: React.FC = () => {
@@ -46,7 +47,7 @@ export const Reports: React.FC = () => {
   
   // Filter activities based on selected filters
   const filteredActivities = useMemo(() => {
-    return activities.filter((activity: any) => {
+    return activities.filter((activity: Activity) => {
       if (selectedDomain !== null && activity.domain !== selectedDomain) {
         return false;
       }
@@ -55,13 +56,13 @@ export const Reports: React.FC = () => {
   }, [activities, selectedDomain]);
   
   const totalTime = useMemo(() => {
-    return filteredActivities.reduce((sum: number, a: any) => sum + a.duration_sec, 0);
+    return filteredActivities.reduce((sum: number, a: Activity) => sum + a.duration_sec, 0);
   }, [filteredActivities]);
   
   const productiveTime = useMemo(() => {
     return filteredActivities
-      .filter((a: any) => a.category_id && categories.find((c: any) => c.id === a.category_id)?.is_productive)
-      .reduce((sum: number, a: any) => sum + a.duration_sec, 0);
+      .filter((a: Activity) => a.category_id && categories.find((c: Category) => c.id === a.category_id)?.is_productive)
+      .reduce((sum: number, a: Activity) => sum + a.duration_sec, 0);
   }, [filteredActivities, categories]);
 
   // Calculate stats by category

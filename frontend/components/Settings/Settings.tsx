@@ -18,7 +18,7 @@ interface SettingsProps {
 type SettingsTab = 'general' | 'categories' | 'rules' | 'about' | string;
 
 const Settings: React.FC<SettingsProps> = () => {
-  const { settings, setSettings, pendingRuleData, settingsActiveTab, scrollToIdlePromptThreshold, setPendingRuleData, setSettingsActiveTab, setScrollToIdlePromptThreshold } = useStore();
+  const { settings, pendingRuleData, settingsActiveTab, scrollToIdlePromptThreshold, setSettingsActiveTab, setScrollToIdlePromptThreshold } = useStore();
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
   const { settingsTabs: pluginTabs } = usePluginFrontend();
   const [localSettings, setLocalSettings] = useState<SettingsType>(settings);
@@ -162,7 +162,6 @@ const Settings: React.FC<SettingsProps> = () => {
             );
           })}
           {pluginTabs.map((tab: PluginSettingsTab) => {
-            const TabIcon = tab.icon;
             return (
               <button
                 key={tab.id}
@@ -175,7 +174,6 @@ const Settings: React.FC<SettingsProps> = () => {
                   }
                 `}
               >
-                {TabIcon && <TabIcon className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />}
                 <span className="font-medium">{tab.label}</span>
               </button>
             );

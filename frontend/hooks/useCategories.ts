@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '../services/api';
+import { categoriesApi } from '../services/api/categories';
 import { useStore } from '../store';
 import { useEffect } from 'react';
 
@@ -8,7 +8,7 @@ export function useCategories() {
 
   const query = useQuery({
     queryKey: ['categories'],
-    queryFn: () => api.categories.getCategories(),
+    queryFn: () => categoriesApi.getCategories(),
   });
 
   useEffect(() => {
@@ -32,7 +32,7 @@ export function useCreateCategory() {
       sort_order: number;
       is_system?: boolean;
       is_pinned?: boolean;
-    }) => api.categories.createCategory(category),
+    }) => categoriesApi.createCategory(category),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['categories'] });
       queryClient.invalidateQueries({ queryKey: ['pinnedCategories'] });
@@ -52,7 +52,7 @@ export function useUpdateCategory() {
       is_productive: boolean | null;
       sort_order: number;
       is_pinned?: boolean;
-    }) => api.categories.updateCategory(category),
+    }) => categoriesApi.updateCategory(category),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['categories'] });
       queryClient.invalidateQueries({ queryKey: ['pinnedCategories'] });
@@ -64,7 +64,7 @@ export function useDeleteCategory() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: number) => api.categories.deleteCategory(id),
+    mutationFn: (id: number) => categoriesApi.deleteCategory(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['categories'] });
       queryClient.invalidateQueries({ queryKey: ['pinnedCategories'] });
@@ -76,7 +76,7 @@ export function useResetSystemCategory() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: number) => api.categories.resetSystemCategory(id),
+    mutationFn: (id: number) => categoriesApi.resetSystemCategory(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['categories'] });
       queryClient.invalidateQueries({ queryKey: ['pinnedCategories'] });
@@ -87,7 +87,7 @@ export function useResetSystemCategory() {
 export function usePinnedCategories() {
   const query = useQuery({
     queryKey: ['pinnedCategories'],
-    queryFn: () => api.categories.getPinnedCategories(),
+    queryFn: () => categoriesApi.getPinnedCategories(),
   });
 
   return query;

@@ -35,8 +35,9 @@ const updateSplashStatus = (status: string) => {
       let timerValue: string | null = null;
       
       // First, try to get elapsed time from timer function (most accurate)
-      if ((window as any).getTimerElapsed) {
-        const elapsed = (window as any).getTimerElapsed();
+      const getTimerElapsed = (window as Window & { getTimerElapsed?: () => number | null }).getTimerElapsed;
+      if (getTimerElapsed) {
+        const elapsed = getTimerElapsed();
         if (elapsed !== null && elapsed !== undefined) {
           timerValue = String(elapsed);
         }
@@ -76,8 +77,9 @@ const hideSplashScreen = () => {
   }
   
   // Stop loading timer
-  if ((window as any).stopLoadingTimer) {
-    (window as any).stopLoadingTimer();
+  const stopLoadingTimer = (window as Window & { stopLoadingTimer?: () => void }).stopLoadingTimer;
+  if (stopLoadingTimer) {
+    stopLoadingTimer();
   }
   
   const splashScreen = document.getElementById('splash-screen');
@@ -97,8 +99,8 @@ const hideSplashScreen = () => {
 };
 
 // Make updateSplashStatus and hideSplashScreen available globally for App.tsx
-(window as any).updateSplashStatus = updateSplashStatus;
-(window as any).hideSplashScreen = hideSplashScreen;
+(window as Window & { updateSplashStatus?: (status: string) => void; hideSplashScreen?: () => void }).updateSplashStatus = updateSplashStatus;
+(window as Window & { updateSplashStatus?: (status: string) => void; hideSplashScreen?: () => void }).hideSplashScreen = hideSplashScreen;
 
 // Update status during initialization
 updateSplashStatus('Preparing application...');

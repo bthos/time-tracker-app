@@ -1,13 +1,14 @@
 import { 
   LayoutDashboard, 
   History, 
-  Settings, 
+  Settings as SettingsIcon, 
   Timer,
   FileText,
   Package,
   X
 } from 'lucide-react';
 import { useStore } from '../../store';
+import type { Settings } from '../../types';
 import { formatDuration } from '../../utils';
 import { useTodayTotal } from '../../hooks';
 import { useSettings } from '../../hooks/useSettings';
@@ -24,7 +25,7 @@ const coreNavItems = [
   { id: 'history', label: 'History', icon: History },
   { id: 'reports', label: 'Reports', icon: FileText },
   { id: 'marketplace', label: 'Marketplace', icon: Package },
-  { id: 'settings', label: 'Settings', icon: Settings },
+  { id: 'settings', label: 'Settings', icon: SettingsIcon },
 ] as const;
 
 export default function Sidebar({ currentView, onNavigate, onClose }: SidebarProps) {
@@ -35,7 +36,7 @@ export default function Sidebar({ currentView, onNavigate, onClose }: SidebarPro
   const storeSettings = useStore((state) => state.settings);
   const querySettingsResult = useSettings();
   const querySettings = querySettingsResult.data;
-  const enableMarketplace = storeSettings.enable_marketplace ?? querySettings?.enable_marketplace ?? false;
+  const enableMarketplace = storeSettings.enable_marketplace ?? (querySettings as Settings | undefined)?.enable_marketplace ?? false;
   const { sidebarItems: pluginSidebarItems } = usePluginFrontend();
   
   // Combine core nav items with plugin sidebar items

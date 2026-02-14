@@ -1,8 +1,10 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Globe } from 'lucide-react';
-import { api } from '../../services/api';
+import { domainsApi } from '../../services/api/domains';
+import { activitiesApi } from '../../services/api/activities';
 import { useStore } from '../../store';
+import type { Activity } from '../../types';
 import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 import { formatDuration, calculatePercentage } from '../../utils/format';
 import Card from '../Common/Card';
@@ -59,19 +61,19 @@ export default function TopWebsites() {
 
   const { data: domains, isLoading: domainsLoading } = useQuery({
     queryKey: ['topDomains', dateRange.start.getTime(), dateRange.end.getTime()],
-    queryFn: () => api.domains.getTopDomains(dateRange, 10),
+    queryFn: () => domainsApi.getTopDomains(dateRange, 10),
   });
 
   const { data: activities, isLoading: activitiesLoading } = useQuery({
     queryKey: ['activities', dateRange.start.getTime(), dateRange.end.getTime()],
-    queryFn: () => api.activities.getActivities(dateRange),
+    queryFn: () => activitiesApi.getActivities(dateRange),
   });
 
   const totalDuration = useMemo(() => {
     if (!activities || activities.length === 0) return 0;
     return activities
-      .filter(a => !a.is_idle && a.domain)
-      .reduce((sum, a) => sum + a.duration_sec, 0);
+      .filter((a: Activity) => !a.is_idle && a.domain)
+      .reduce((sum: number, a: Activity) => sum + a.duration_sec, 0);
   }, [activities]);
 
   const isLoading = domainsLoading || activitiesLoading;
@@ -104,7 +106,7 @@ export default function TopWebsites() {
             No website activity recorded for this period
           </div>
         ) : (
-          domainsList.map((domain, index) => {
+          domainsList.map((domain: { domain: string; duration_sec: number }, index: number) => {
             const percentage = calculatePercentage(domain.duration_sec, totalDuration);
             const barWidth = calculatePercentage(domain.duration_sec, maxDuration);
             

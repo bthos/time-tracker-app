@@ -1,2 +1,4 @@
 export * from './api';
-export { default as api } from './api';
+// Re-export api as default for backward compatibility
+import { api } from './api/index';
+export { api as default };

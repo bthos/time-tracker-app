@@ -4,7 +4,7 @@ import type { ComponentType } from 'react';
 
 export interface PluginRoute {
   path: string;
-  component: ComponentType<any>;
+  component: ComponentType<Record<string, unknown>>;
   exact?: boolean;
 }
 
@@ -18,7 +18,7 @@ export interface PluginSidebarItem {
 
 export interface PluginDashboardWidget {
   id: string;
-  component: ComponentType<any>;
+  component: ComponentType<Record<string, unknown>>;
   order?: number;
   gridColSpan?: number; // 1-4 for grid layout
 }
@@ -26,7 +26,7 @@ export interface PluginDashboardWidget {
 export interface PluginSettingsTab {
   id: string;
   label: string;
-  component: ComponentType<any>;
+  component: ComponentType<Record<string, unknown>>;
   order?: number;
 }
 

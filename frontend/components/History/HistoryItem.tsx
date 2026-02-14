@@ -2,7 +2,7 @@ import React from 'react';
 import { Activity, ManualEntry } from '../../types';
 import { formatDuration, formatTime } from '../../utils/format';
 import Button from '../Common/Button';
-import { Edit2, Trash2, CheckCircle2, XCircle, Clock, Play, Tag } from 'lucide-react';
+import { Edit2, Trash2, Play, Tag } from 'lucide-react';
 
 export type HistoryItem = {
   id: string;

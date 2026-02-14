@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '../services/api';
+import { manualEntriesApi } from '../services/api/manualEntries';
 import { useStore } from '../store';
 
 export function useManualEntries() {
@@ -14,7 +14,7 @@ export function useManualEntries() {
 
   return useQuery({
     queryKey: ['manualEntries', normalizedRange.start.getTime(), normalizedRange.end.getTime()],
-    queryFn: () => api.manualEntries.getManualEntries(normalizedRange),
+    queryFn: () => manualEntriesApi.getManualEntries(normalizedRange),
   });
 }
 
@@ -27,7 +27,7 @@ export function useCreateManualEntry() {
       category_id: number | null;
       started_at: number;
       ended_at: number;
-    }) => api.manualEntries.createManualEntry(entry),
+    }) => manualEntriesApi.createManualEntry(entry),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['manualEntries'] });
       queryClient.invalidateQueries({ queryKey: ['dailyStats'] });
@@ -48,7 +48,7 @@ export function useUpdateManualEntry() {
       category_id: number | null;
       started_at: number;
       ended_at: number;
-    }) => api.manualEntries.updateManualEntry(entry),
+    }) => manualEntriesApi.updateManualEntry(entry),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['manualEntries'] });
       queryClient.invalidateQueries({ queryKey: ['dailyStats'] });
@@ -63,7 +63,7 @@ export function useDeleteManualEntry() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: number) => api.manualEntries.deleteManualEntry(id),
+    mutationFn: (id: number) => manualEntriesApi.deleteManualEntry(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['manualEntries'] });
       queryClient.invalidateQueries({ queryKey: ['dailyStats'] });

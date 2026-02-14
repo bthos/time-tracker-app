@@ -1,4 +1,4 @@
-import { api } from '../services/api';
+import { exportApi } from '../services/api/export';
 import { showSuccess, handleApiError } from './toast';
 import { format } from 'date-fns';
 import type { DateRange } from '../types';
@@ -52,9 +52,9 @@ export async function exportData(
 
     // Export the data using backend API
     if (isJson) {
-      await api.export.exportToJson(normalizedRange, filePath);
+      await exportApi.exportToJson(normalizedRange, filePath);
     } else {
-      await api.export.exportToCsv(normalizedRange, filePath);
+      await exportApi.exportToCsv(normalizedRange, filePath);
     }
 
     const fileName = filePath.split('/').pop() || filePath.split('\\').pop() || 'file';
