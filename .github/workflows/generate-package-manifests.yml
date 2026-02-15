@@ -49,6 +49,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.get_version.outputs.version }}
+      tag: ${{ steps.get_version.outputs.tag }}
       msi_url: ${{ steps.get_artifacts.outputs.msi_url }}
       msi_size: ${{ steps.get_artifacts.outputs.msi_size }}
       msi_sha256: ${{ steps.checksums.outputs.msi_sha256 }}
@@ -299,7 +300,9 @@ jobs:
           $manifestContent += "PackageName: $PRODUCT_NAME`n"
           $manifestContent += "PackageUrl: https://github.com/${{ github.repository }}`n"
           $manifestContent += "License: MIT`n"
-          $manifestContent += "LicenseUrl: https://github.com/${{ github.repository }}/blob/main/LICENSE`n"
+          # Use version-specific ref (release tag) so manifest remains immutable if license changes on main
+          $TAG = "${{ needs.prepare-artifacts.outputs.tag }}"
+          $manifestContent += "LicenseUrl: https://github.com/${{ github.repository }}/blob/$TAG/LICENSE`n"
           $manifestContent += "Copyright: Copyright (c) 2026 tmtrckr`n"
           $manifestContent += "CopyrightUrl: https://github.com/${{ github.repository }}`n"
           $manifestContent += "ShortDescription: $SHORT_DESC`n"
