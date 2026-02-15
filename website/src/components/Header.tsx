@@ -13,13 +13,13 @@ const Header: FC = () => {
   const handleHomeClick = (e: React.MouseEvent) => {
     setIsMenuOpen(false);
     
-    // If we're already on the home page, scroll to top
+    // If we're already on the home page, scroll to top without changing URL
     if (location.pathname === '/' || location.pathname === '') {
       e.preventDefault();
-      window.history.replaceState(null, '', '/');
+      // Just scroll to top, don't modify URL to preserve base path
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
-    // Otherwise, Link component will handle navigation
+    // Otherwise, Link component will handle navigation correctly
   };
 
   const handleSectionClick = (id: string, e: React.MouseEvent) => {
