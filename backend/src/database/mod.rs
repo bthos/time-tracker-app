@@ -21,18 +21,10 @@ pub mod manual_entries;
 pub mod settings;
 pub mod stats;
 pub mod plugins;
+pub mod plugin_tables;
 
 // Re-export Database and constants
-pub use common::{Database, SYSTEM_CATEGORY_UNCATEGORIZED, SYSTEM_CATEGORY_BREAK, SYSTEM_CATEGORY_THINKING};
+pub use common::Database;
 
 // Re-export all models
 pub use models::*;
-
-// Re-export methods from core domain modules only
-pub use activities::*;
-pub use categories::*;
-pub use rules::*;
-pub use manual_entries::*;
-pub use settings::*;
-pub use stats::*;
-pub use plugins::*;

@@ -30,7 +30,7 @@ pub mod plugins;
 pub mod common;
 
 // Re-export AppState and common types
-pub use common::{AppState, CategoryResponse, i32_to_opt_bool};
+pub use common::AppState;
 
 // Re-export commands from all modules
 pub use activities::*;

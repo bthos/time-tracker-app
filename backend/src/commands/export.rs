@@ -14,7 +14,7 @@ pub fn export_to_csv(
     end: i64,
     file_path: String,
 ) -> Result<(), String> {
-    let activities = state.db.get_activities(start, end, None, None).map_err(|e| e.to_string())?;
+    let activities = state.db.get_activities(start, end, None, None, None, None).map_err(|e| e.to_string())?;
     let categories = state.db.get_categories().map_err(|e| e.to_string())?;
     
     let mut file = File::create(&file_path)
@@ -67,7 +67,7 @@ pub fn export_to_json(
     end: i64,
     file_path: String,
 ) -> Result<(), String> {
-    let activities = state.db.get_activities(start, end, None, None).map_err(|e| e.to_string())?;
+    let activities = state.db.get_activities(start, end, None, None, None, None).map_err(|e| e.to_string())?;
     
     let json = serde_json::to_string_pretty(&activities)
         .map_err(|e| format!("Failed to serialize JSON: {}", e))?;

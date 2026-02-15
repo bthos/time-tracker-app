@@ -1,5 +1,16 @@
 // Plugin types for frontend
 
+export interface PluginDependency {
+  plugin_id: string;
+  version?: string;  // Optional version constraint (e.g., ">=1.0.0", "1.2.3")
+}
+
+export interface ExposedTable {
+  table_name: string;
+  allowed_plugins: string[];  // Empty = no access, ["*"] = all plugins, ["plugin1", "plugin2"] = specific plugins only
+  description?: string;
+}
+
 export interface PluginManifest {
   plugin: {
     name: string;
@@ -12,6 +23,8 @@ export interface PluginManifest {
     api_version?: string;
     min_core_version?: string;
     max_core_version?: string;
+    dependencies?: PluginDependency[];
+    exposed_tables?: ExposedTable[];
   };
   backend?: {
     library_name: string;

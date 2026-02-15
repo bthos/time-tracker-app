@@ -144,15 +144,20 @@ fn main() {
             commands::unload_plugin,
             commands::invoke_plugin_command,
             commands::is_plugin_installed,
+            commands::get_plugin,
             commands::get_plugin_ids,
             commands::is_plugin_loaded,
+            commands::get_plugins_directory,
+            commands::check_plugin_installed,
+            commands::get_plugin_manifest_path,
         ])
         .setup(move |app| {
             let app_handle = app.handle();
             let db_clone = Arc::clone(&db);
 
-            // Start the tracker in a background thread
-            let tracker = Arc::new(tracker::Tracker::new(Arc::clone(&db_clone)));
+            // Start the tracker in a background thread (extension_registry for plugin data hooks)
+            let extension_registry_for_tracker = app.state::<commands::AppState>().extension_registry.clone();
+            let tracker = Arc::new(tracker::Tracker::new(Arc::clone(&db_clone), extension_registry_for_tracker));
             
             // Load settings from database and apply to tracker
             if let Ok(settings) = db_clone.get_all_settings() {
@@ -212,6 +217,28 @@ fn main() {
                             use plugin_system::api::PluginAPI;
                             use time_tracker_plugin_sdk::PluginAPIInterface;
 
+                            // First pass: Load manifests and register exposed tables
+                            let installed_plugins = db_for_plugins.get_installed_plugins()
+                                .unwrap_or_default();
+                            
+                            for (plugin_id, _name, _version, _description, _repo_url, manifest_path, _frontend_entry, _frontend_components, _author, enabled) in installed_plugins {
+                                if !enabled {
+                                    continue;
+                                }
+                                
+                                if let Some(manifest_path_str) = manifest_path {
+                                    let manifest_path_buf = std::path::PathBuf::from(manifest_path_str);
+                                    if let Ok(manifest) = plugin_loader_for_loading.load_manifest(&manifest_path_buf) {
+                                        if let Some(ref exposed_tables) = manifest.plugin.exposed_tables {
+                                            if let Err(e) = extension_registry_for_loading.register_exposed_tables(&plugin_id, exposed_tables) {
+                                                eprintln!("Warning: Failed to register exposed tables for plugin {}: {}", plugin_id, e);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Second pass: Initialize plugins
                             for (plugin_id, mut plugin) in dynamic_plugins {
                                 let api = PluginAPI::new(
                                     Arc::clone(&db_for_plugins),

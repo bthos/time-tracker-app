@@ -706,6 +706,9 @@ jobs:
       contents: write
       pull-requests: write
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Check for PAT token
         run: |
           if [ -z "${{ secrets.PACKAGE_MANAGER_PAT }}" ]; then
@@ -862,6 +865,9 @@ jobs:
       contents: write
       pull-requests: write
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Check for PAT token
         run: |
           if [ -z "${{ secrets.PACKAGE_MANAGER_PAT }}" ]; then

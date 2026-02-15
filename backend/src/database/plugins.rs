@@ -118,7 +118,7 @@ impl Database {
 
     /// Apply plugin extensions to database schema
     pub fn apply_plugin_extensions(&self, extension_registry: &crate::plugin_system::extensions::ExtensionRegistry) -> Result<(), String> {
-        use crate::plugin_system::extensions::{EntityType, SchemaChange};
+        use crate::plugin_system::extensions::{EntityType, SchemaChange, AutoTimestamp};
         
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         let tx = conn.unchecked_transaction().map_err(|e| format!("Failed to start transaction: {}", e))?;
@@ -196,6 +196,22 @@ impl Database {
                             // Create indexes for foreign keys
                             for index_sql in indexes {
                                 tx.execute(&index_sql, []).ok();
+                            }
+
+                            // Record auto-timestamp columns for this table
+                            let created_col: Option<String> = columns
+                                .iter()
+                                .find(|c| c.auto_timestamp.as_ref() == Some(&AutoTimestamp::Created))
+                                .map(|c| c.name.clone());
+                            let updated_col: Option<String> = columns
+                                .iter()
+                                .find(|c| c.auto_timestamp.as_ref() == Some(&AutoTimestamp::Updated))
+                                .map(|c| c.name.clone());
+                            if created_col.is_some() || updated_col.is_some() {
+                                let _ = tx.execute(
+                                    "INSERT OR REPLACE INTO plugin_auto_timestamps (table_name, created_at_col, updated_at_col) VALUES (?, ?, ?)",
+                                    params![table, created_col, updated_col],
+                                );
                             }
                         }
                     }

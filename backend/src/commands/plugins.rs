@@ -53,42 +53,48 @@ fn get_registry_urls(state: &AppState) -> Result<Vec<String>, String> {
     Ok(vec!["https://raw.githubusercontent.com/tmtrckr/plugins-registry/main/registry.json".to_string()])
 }
 
+/// Helper to convert registry plugin to frontend info
+fn registry_plugin_to_info(plugin: &crate::plugin_system::discovery::RegistryPlugin) -> RegistryPluginInfo {
+    RegistryPluginInfo {
+        id: plugin.id.clone(),
+        name: plugin.name.clone(),
+        author: plugin.author.clone(),
+        repository: plugin.repository.clone(),
+        latest_version: plugin.latest_version.clone(),
+        description: plugin.description.clone(),
+        category: plugin.category.clone(),
+        verified: plugin.verified,
+        downloads: plugin.downloads,
+        tags: plugin.tags.clone(),
+        license: plugin.license.clone(),
+        min_core_version: plugin.min_core_version.clone(),
+        max_core_version: plugin.max_core_version.clone(),
+        api_version: plugin.api_version.clone(),
+    }
+}
+
 /// Helper function to fetch plugins from multiple registries and merge them
 async fn fetch_plugins_from_registries(urls: Vec<String>) -> Result<Vec<RegistryPluginInfo>, String> {
     use futures::future::join_all;
-    
+
     let mut all_plugins: std::collections::HashMap<String, RegistryPluginInfo> = std::collections::HashMap::new();
-    
-    let fetch_tasks: Vec<_> = urls.into_iter().map(|url| {
-        let mut discovery = PluginDiscovery::new(url);
-        async move {
-            discovery.get_registry().await
-        }
-    }).collect();
-    
+
+    let fetch_tasks: Vec<_> = urls
+        .into_iter()
+        .map(|url| {
+            let mut discovery = PluginDiscovery::new(url);
+            async move { discovery.get_registry().await }
+        })
+        .collect();
+
     let results = join_all(fetch_tasks).await;
-    
+
     for result in results {
         match result {
             Ok(registry) => {
                 for plugin in registry.plugins {
-                    let plugin_info = RegistryPluginInfo {
-                        id: plugin.id.clone(),
-                        name: plugin.name,
-                        author: plugin.author,
-                        repository: plugin.repository,
-                        latest_version: plugin.latest_version.clone(),
-                        description: plugin.description,
-                        category: plugin.category,
-                        verified: plugin.verified,
-                        downloads: plugin.downloads,
-                        tags: plugin.tags,
-                        license: plugin.license,
-                        min_core_version: plugin.min_core_version,
-                        max_core_version: plugin.max_core_version,
-                        api_version: plugin.api_version,
-                    };
-                    
+                    let plugin_info = registry_plugin_to_info(&plugin);
+
                     match all_plugins.get(&plugin.id) {
                         Some(existing) => {
                             if compare_versions(&plugin.latest_version, &existing.latest_version) > 0 {
@@ -96,7 +102,7 @@ async fn fetch_plugins_from_registries(urls: Vec<String>) -> Result<Vec<Registry
                             }
                         }
                         None => {
-                            all_plugins.insert(plugin.id, plugin_info);
+                            all_plugins.insert(plugin.id.clone(), plugin_info);
                         }
                     }
                 }
@@ -106,7 +112,7 @@ async fn fetch_plugins_from_registries(urls: Vec<String>) -> Result<Vec<Registry
             }
         }
     }
-    
+
     Ok(all_plugins.into_values().collect())
 }
 
@@ -140,26 +146,44 @@ pub async fn get_plugin_registry(state: State<'_, AppState>) -> Result<Vec<Regis
     fetch_plugins_from_registries(registry_urls).await
 }
 
-/// Search plugins in registry(ies)
+/// Search plugins in registry(ies) using PluginDiscovery::search_plugins per registry
 #[tauri::command]
 pub async fn search_plugins(state: State<'_, AppState>, query: String) -> Result<Vec<RegistryPluginInfo>, String> {
     let registry_urls = get_registry_urls(&state)?;
-    let all_plugins = fetch_plugins_from_registries(registry_urls).await?;
-    
-    let query_lower = query.to_lowercase();
-    let filtered: Vec<RegistryPluginInfo> = all_plugins
+    use futures::future::join_all;
+    use std::collections::HashMap;
+
+    let search_tasks: Vec<_> = registry_urls
         .into_iter()
-        .filter(|plugin| {
-            plugin.name.to_lowercase().contains(&query_lower)
-                || plugin.description.to_lowercase().contains(&query_lower)
-                || plugin.id.to_lowercase().contains(&query_lower)
-                || plugin.tags.as_ref().map_or(false, |tags| {
-                    tags.iter().any(|tag| tag.to_lowercase().contains(&query_lower))
-                })
+        .map(|url| {
+            let q = query.clone();
+            async move {
+                let mut discovery = PluginDiscovery::new(url);
+                discovery.search_plugins(&q).await
+            }
         })
         .collect();
-    
-    Ok(filtered)
+
+    let results = join_all(search_tasks).await;
+    let mut by_id: HashMap<String, RegistryPluginInfo> = HashMap::new();
+    for result in results {
+        if let Ok(plugins) = result {
+            for p in plugins {
+                let info = registry_plugin_to_info(&p);
+                match by_id.get(&p.id) {
+                    Some(existing) => {
+                        if compare_versions(&p.latest_version, &existing.latest_version) > 0 {
+                            by_id.insert(p.id, info);
+                        }
+                    }
+                    None => {
+                        by_id.insert(p.id.clone(), info);
+                    }
+                }
+            }
+        }
+    }
+    Ok(by_id.into_values().collect())
 }
 
 /// Get plugin info from repository URL
@@ -171,28 +195,41 @@ pub async fn get_plugin_info(repository_url: String) -> Result<serde_json::Value
     Ok(serde_json::to_value(&manifest).map_err(|e| format!("Failed to serialize manifest: {}", e))?)
 }
 
-/// Discover plugin from repository URL
+/// Discover plugin from repository URL.
+/// Uses PluginDiscovery::get_plugin_by_id when a plugin id can be derived from the URL.
 #[tauri::command]
 pub async fn discover_plugin(state: State<'_, AppState>, repository_url: String) -> Result<RegistryPluginInfo, String> {
     let registry_urls = get_registry_urls(&state)?;
+
+    if let Ok((_owner, repo)) = PluginDiscovery::parse_github_url_static(&repository_url) {
+        let plugin_id_from_repo = repo.trim_end_matches("-plugin");
+        for url in &registry_urls {
+            let mut discovery = PluginDiscovery::new(url.clone());
+            if let Ok(Some(plugin)) = discovery.get_plugin_by_id(plugin_id_from_repo).await {
+                if plugin.repository == repository_url {
+                    return Ok(registry_plugin_to_info(&plugin));
+                }
+            }
+        }
+    }
+
     let all_plugins = fetch_plugins_from_registries(registry_urls).await?;
-    
     if let Some(plugin) = all_plugins.into_iter().find(|p| p.repository == repository_url) {
         return Ok(plugin);
     }
-    
+
     let discovery = PluginDiscovery::new("".to_string());
     let manifest = discovery.get_plugin_manifest(&repository_url).await?;
-    
+
     let (_owner, repo) = PluginDiscovery::parse_github_url_static(&repository_url)
         .map_err(|e| format!("Invalid GitHub URL: {}", e))?;
     let plugin_id = repo.trim_end_matches("-plugin");
-    
+
     Ok(RegistryPluginInfo {
         id: plugin_id.to_string(),
         name: manifest.plugin.display_name.unwrap_or(manifest.plugin.name.clone()),
         author: manifest.plugin.author,
-        repository: manifest.plugin.repository.unwrap_or(repository_url.clone()),
+        repository: manifest.plugin.repository.unwrap_or(repository_url),
         latest_version: manifest.plugin.version,
         description: manifest.plugin.description,
         category: None,
@@ -263,6 +300,15 @@ pub async fn install_plugin(
                 Ok(mut plugin) => {
                     use crate::plugin_system::api::PluginAPI;
                     use time_tracker_plugin_sdk::PluginAPIInterface;
+                    
+                    // Load manifest and register exposed tables before initialization
+                    if let Ok(manifest) = app_loader.load_manifest(&manifest_path) {
+                        if let Some(ref exposed_tables) = manifest.plugin.exposed_tables {
+                            if let Err(e) = extension_registry.register_exposed_tables(&plugin_id, exposed_tables) {
+                                eprintln!("Warning: Failed to register exposed tables for plugin {}: {}", plugin_id, e);
+                            }
+                        }
+                    }
                     
                     let api = PluginAPI::new(Arc::clone(&state.db), Arc::clone(extension_registry), plugin_id.clone());
                     match plugin.initialize(&api as &dyn PluginAPIInterface) {
@@ -433,6 +479,18 @@ pub fn load_plugin(
                     use crate::plugin_system::api::PluginAPI;
                     use time_tracker_plugin_sdk::PluginAPIInterface;
                     
+                    // Load manifest and register exposed tables before initialization
+                    if let Some(manifest_path_str) = &plugin_info.5 {
+                        let manifest_path_buf = std::path::PathBuf::from(manifest_path_str);
+                        if let Ok(manifest) = loader.load_manifest(&manifest_path_buf) {
+                            if let Some(ref exposed_tables) = manifest.plugin.exposed_tables {
+                                if let Err(e) = extension_registry.register_exposed_tables(&plugin_id, exposed_tables) {
+                                    eprintln!("Warning: Failed to register exposed tables for plugin {}: {}", plugin_id, e);
+                                }
+                            }
+                        }
+                    }
+                    
                     let api = PluginAPI::new(Arc::clone(&state.db), Arc::clone(extension_registry), plugin_id.clone());
                     match plugin.initialize(&api as &dyn PluginAPIInterface) {
                         Ok(()) => {
@@ -521,6 +579,33 @@ pub fn is_plugin_installed(
     state.db.is_plugin_installed(&plugin_id)
 }
 
+/// Get plugin status (installed and loaded).
+/// Use invoke_plugin_command to interact with a plugin; PluginRegistry::get() is not used
+/// because trait objects cannot be returned from behind a Mutex.
+#[tauri::command]
+pub fn get_plugin(
+    state: State<'_, AppState>,
+    plugin_id: String,
+) -> Result<serde_json::Value, String> {
+    let installed = if let Some(registry) = &state.plugin_registry {
+        registry.is_installed(&plugin_id).unwrap_or(false)
+    } else {
+        state.db.is_plugin_installed(&plugin_id).unwrap_or(false)
+    };
+
+    let loaded = state
+        .plugin_loader
+        .as_ref()
+        .map(|loader| loader.is_plugin_loaded(&plugin_id))
+        .unwrap_or(false);
+
+    Ok(serde_json::json!({
+        "id": plugin_id,
+        "installed": installed,
+        "loaded": loaded,
+    }))
+}
+
 /// Get all registered plugin IDs
 #[tauri::command]
 pub fn get_plugin_ids(state: State<'_, AppState>) -> Result<Vec<String>, String> {
@@ -542,4 +627,44 @@ pub fn is_plugin_loaded(
     } else {
         Ok(false)
     }
+}
+
+/// Get the plugins directory path (where plugins are installed)
+#[tauri::command]
+pub fn get_plugins_directory(state: State<'_, AppState>) -> Result<String, String> {
+    state
+        .plugin_loader
+        .as_ref()
+        .ok_or_else(|| "Plugin loader not available".to_string())
+        .map(|loader| loader.plugins_dir().to_string_lossy().to_string())
+}
+
+/// Check if a plugin is installed on disk (by author and plugin_id)
+#[tauri::command]
+pub fn check_plugin_installed(
+    state: State<'_, AppState>,
+    author: String,
+    plugin_id: String,
+) -> Result<bool, String> {
+    Ok(state
+        .plugin_loader
+        .as_ref()
+        .map(|loader| loader.is_installed(&author, &plugin_id))
+        .unwrap_or(false))
+}
+
+/// Get the manifest path for an installed plugin if present
+#[tauri::command]
+pub fn get_plugin_manifest_path(
+    state: State<'_, AppState>,
+    author: String,
+    plugin_id: String,
+) -> Result<Option<String>, String> {
+    let loader = state
+        .plugin_loader
+        .as_ref()
+        .ok_or_else(|| "Plugin loader not available".to_string())?;
+    Ok(loader
+        .get_manifest_path(&author, &plugin_id)
+        .map(|p| p.to_string_lossy().to_string()))
 }

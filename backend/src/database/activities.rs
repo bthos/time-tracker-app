@@ -1,22 +1,24 @@
 //! Activity-related database operations
 
 use rusqlite::{Connection, Result, params};
+use rusqlite::types::Value as SqliteValue;
 use super::common::Database;
 use super::models::Activity;
 use super::common::SYSTEM_CATEGORY_UNCATEGORIZED;
 use chrono::Local;
 
 impl Database {
-    /// Insert or update an activity record
+    /// Insert or update an activity record.
+    /// Returns the activity id (existing or newly inserted).
     pub fn upsert_activity(
         &self,
         app_name: &str,
         window_title: Option<&str>,
         domain: Option<&str>,
         timestamp: i64,
-    ) -> Result<()> {
+    ) -> Result<i64> {
         let conn = self.conn.lock().unwrap();
-        
+
         // Try to find matching category
         let category_id = self.find_category_for_activity(&conn, app_name, window_title, domain);
 
@@ -41,22 +43,43 @@ impl Database {
             .ok()
         };
 
-        if let Some((id, duration, started_at)) = existing {
+        let id = if let Some((id, duration, started_at)) = existing {
             let time_diff = timestamp - started_at;
             let new_duration = std::cmp::max(duration + 5, time_diff);
-            
+
             conn.execute(
                 "UPDATE activities SET duration_sec = ?, category_id = ? WHERE id = ?",
                 params![new_duration, category_id, id],
             )?;
+            id
         } else {
             conn.execute(
                 "INSERT INTO activities (app_name, window_title, domain, category_id, started_at, duration_sec, is_idle)
                  VALUES (?, ?, ?, ?, ?, 5, FALSE)",
                 params![app_name, window_title, domain, category_id, timestamp],
             )?;
-        }
+            conn.last_insert_rowid()
+        };
 
+        Ok(id)
+    }
+
+    /// Update an activity row by id (used after plugin hooks modify the activity).
+    pub fn update_activity_row(&self, activity: &Activity) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "UPDATE activities SET app_name = ?, window_title = ?, domain = ?, category_id = ?, started_at = ?, duration_sec = ?, is_idle = ? WHERE id = ?",
+            params![
+                activity.app_name,
+                activity.window_title,
+                activity.domain,
+                activity.category_id,
+                activity.started_at,
+                activity.duration_sec,
+                activity.is_idle,
+                activity.id,
+            ],
+        )?;
         Ok(())
     }
 
@@ -228,8 +251,16 @@ impl Database {
         Ok(())
     }
 
-    /// Get activities for a time range with optional pagination
-    pub fn get_activities(&self, start: i64, end: i64, limit: Option<i64>, offset: Option<i64>) -> Result<Vec<Activity>> {
+    /// Get activities for a time range with optional pagination and filters
+    pub fn get_activities(
+        &self,
+        start: i64,
+        end: i64,
+        limit: Option<i64>,
+        offset: Option<i64>,
+        exclude_idle: Option<bool>,
+        category_ids: Option<&[i64]>,
+    ) -> Result<Vec<Activity>> {
         let conn = self.conn.lock().unwrap();
         
         let map_row = |row: &rusqlite::Row| -> Result<Activity> {
@@ -245,40 +276,54 @@ impl Database {
             })
         };
         
-        let activities = match (limit, offset) {
+        // Build WHERE clause components
+        let mut where_parts: Vec<String> = vec!["started_at >= ?".to_string(), "started_at <= ?".to_string()];
+        let mut params_vec: Vec<SqliteValue> = vec![
+            SqliteValue::Integer(start),
+            SqliteValue::Integer(end),
+        ];
+        
+        if let Some(true) = exclude_idle {
+            where_parts.push("is_idle = 0".to_string());
+        }
+        
+        if let Some(ids) = category_ids {
+            if !ids.is_empty() {
+                let placeholders: Vec<String> = (0..ids.len()).map(|_| "?".to_string()).collect();
+                let category_filter = format!("category_id IN ({})", placeholders.join(","));
+                where_parts.push(category_filter);
+                for id in ids {
+                    params_vec.push(SqliteValue::Integer(*id));
+                }
+            }
+        }
+        
+        let where_clause = where_parts.join(" AND ");
+        let mut query = format!(
+            "SELECT id, app_name, window_title, domain, category_id, started_at, duration_sec, is_idle
+             FROM activities
+             WHERE {}
+             ORDER BY started_at ASC",
+            where_clause
+        );
+        
+        // Add pagination
+        match (limit, offset) {
             (Some(limit_val), Some(offset_val)) => {
-                let mut stmt = conn.prepare(
-                    "SELECT id, app_name, window_title, domain, category_id, started_at, duration_sec, is_idle
-                     FROM activities
-                     WHERE started_at >= ? AND started_at <= ?
-                     ORDER BY started_at ASC
-                     LIMIT ? OFFSET ?"
-                )?;
-                let rows = stmt.query_map(params![start, end, limit_val, offset_val], map_row)?;
-                rows.collect::<Result<Vec<_>>>()?
+                query.push_str(" LIMIT ? OFFSET ?");
+                params_vec.push(SqliteValue::Integer(limit_val));
+                params_vec.push(SqliteValue::Integer(offset_val));
             }
             (Some(limit_val), None) => {
-                let mut stmt = conn.prepare(
-                    "SELECT id, app_name, window_title, domain, category_id, started_at, duration_sec, is_idle
-                     FROM activities
-                     WHERE started_at >= ? AND started_at <= ?
-                     ORDER BY started_at ASC
-                     LIMIT ?"
-                )?;
-                let rows = stmt.query_map(params![start, end, limit_val], map_row)?;
-                rows.collect::<Result<Vec<_>>>()?
+                query.push_str(" LIMIT ?");
+                params_vec.push(SqliteValue::Integer(limit_val));
             }
-            (None, _) => {
-                let mut stmt = conn.prepare(
-                    "SELECT id, app_name, window_title, domain, category_id, started_at, duration_sec, is_idle
-                     FROM activities
-                     WHERE started_at >= ? AND started_at <= ?
-                     ORDER BY started_at ASC"
-                )?;
-                let rows = stmt.query_map(params![start, end], map_row)?;
-                rows.collect::<Result<Vec<_>>>()?
-            }
-        };
+            (None, _) => {}
+        }
+        
+        let mut stmt = conn.prepare(&query)?;
+        let rows = stmt.query_map(rusqlite::params_from_iter(params_vec.iter()), map_row)?;
+        let activities = rows.collect::<Result<Vec<_>>>()?;
 
         Ok(activities)
     }

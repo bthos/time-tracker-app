@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 /// Latest schema version; new installs get this without running migrations.
-const LATEST_SCHEMA_VERSION: i64 = 12;
+const LATEST_SCHEMA_VERSION: i64 = 13;
 
 /// System category IDs (negative to avoid conflicts with regular categories)
 pub const SYSTEM_CATEGORY_UNCATEGORIZED: i64 = -1;
@@ -266,7 +266,26 @@ impl Database {
         if version < 10 { self.migrate_v10(conn)?; }
         if version < 11 { self.migrate_v11(conn)?; }
         if version < 12 { self.migrate_v12(conn)?; }
+        if version < 13 { self.migrate_v13(conn)?; }
 
+        Ok(())
+    }
+
+    fn migrate_v13(&self, conn: &Connection) -> Result<()> {
+        let tx = conn.unchecked_transaction()?;
+        tx.execute(
+            "CREATE TABLE IF NOT EXISTS plugin_auto_timestamps (
+                table_name TEXT PRIMARY KEY,
+                created_at_col TEXT,
+                updated_at_col TEXT
+            )",
+            [],
+        )?;
+        tx.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES ('schema_version', '13')",
+            [],
+        )?;
+        tx.commit()?;
         Ok(())
     }
 

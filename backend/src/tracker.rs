@@ -7,6 +7,7 @@ use std::time::Duration;
 
 use crate::database::Database;
 use crate::idle::IdleMonitor;
+use crate::plugin_system::ExtensionRegistry;
 use crate::window::WindowTracker;
 
 /// Extract domain from browser window title
@@ -114,6 +115,7 @@ fn is_valid_domain(s: &str) -> bool {
 /// Tracker service that runs the main tracking loop
 pub struct Tracker {
     db: Arc<Database>,
+    extension_registry: Option<Arc<ExtensionRegistry>>,
     window_tracker: WindowTracker,
     idle_monitor: Arc<IdleMonitor>,
     running: Arc<AtomicBool>,
@@ -123,10 +125,12 @@ pub struct Tracker {
 }
 
 impl Tracker {
-    /// Create a new tracker instance
-    pub fn new(db: Arc<Database>) -> Self {
+    /// Create a new tracker instance.
+    /// If `extension_registry` is provided, plugin data hooks will be applied after each activity upsert.
+    pub fn new(db: Arc<Database>, extension_registry: Option<Arc<ExtensionRegistry>>) -> Self {
         Self {
             db,
+            extension_registry,
             window_tracker: WindowTracker::new(),
             idle_monitor: Arc::new(IdleMonitor::new()),
             running: Arc::new(AtomicBool::new(false)),
@@ -191,6 +195,7 @@ impl Tracker {
         let running = Arc::clone(&self.running);
         let paused = Arc::clone(&self.paused);
         let db = Arc::clone(&self.db);
+        let extension_registry = self.extension_registry.clone();
         let idle_threshold = Arc::clone(&self.idle_threshold_secs);
         let idle_monitor = Arc::clone(&self.idle_monitor);
 
@@ -251,13 +256,25 @@ impl Tracker {
                 // Get active window info
                 if let Some(window_info) = window_tracker.get_active_window() {
                     let domain = extract_domain(&window_info.app_name, window_info.title.as_deref());
-                    if let Err(e) = db.upsert_activity(
+                    match db.upsert_activity(
                         &window_info.app_name,
                         window_info.title.as_deref(),
                         domain.as_deref(),
                         now,
                     ) {
-                        eprintln!("Failed to record activity: {}", e);
+                        Ok(activity_id) => {
+                            // Apply plugin data hooks if extension registry is available
+                            if let Some(reg) = &extension_registry {
+                                if let Ok(Some(mut activity)) = db.get_activity_by_id(activity_id) {
+                                    if let Err(e) = reg.apply_activity_hooks(&mut activity, &db) {
+                                        eprintln!("Warning: Failed to apply activity hooks: {}", e);
+                                    } else if let Err(e) = db.update_activity_row(&activity) {
+                                        eprintln!("Warning: Failed to persist activity after hooks: {}", e);
+                                    }
+                                }
+                            }
+                        }
+                        Err(e) => eprintln!("Failed to record activity: {}", e),
                     }
                 }
             }

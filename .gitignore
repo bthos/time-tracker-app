@@ -30,6 +30,7 @@ lerna-debug.log*
 .cursor*
 .specstory/
 .codemie/
+change-requests/
 plans/
 
 # Environment variables

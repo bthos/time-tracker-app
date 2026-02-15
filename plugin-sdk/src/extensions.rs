@@ -49,6 +49,15 @@ pub enum SchemaChange {
     },
 }
 
+/// Marks a column as automatically set on insert and/or update (e.g. created_at, updated_at).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AutoTimestamp {
+    /// Set once when the row is inserted (e.g. created_at).
+    Created,
+    /// Set on insert and updated on every update (e.g. updated_at).
+    Updated,
+}
+
 /// Table column definition for CreateTable
 #[derive(Debug, Clone)]
 pub struct TableColumn {
@@ -58,6 +67,8 @@ pub struct TableColumn {
     pub nullable: bool,
     pub default: Option<String>,
     pub foreign_key: Option<ForeignKey>,
+    /// If set, the core will automatically set this column on insert/update (Unix timestamp).
+    pub auto_timestamp: Option<AutoTimestamp>,
 }
 
 /// Foreign key definition

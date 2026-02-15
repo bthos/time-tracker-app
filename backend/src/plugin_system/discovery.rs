@@ -57,6 +57,25 @@ pub struct PluginManifestSection {
     pub min_core_version: Option<String>,
     #[serde(rename = "max_core_version")]
     pub max_core_version: Option<String>,
+    #[serde(default)]
+    pub dependencies: Option<Vec<PluginDependency>>,
+    #[serde(default, rename = "exposed_tables")]
+    pub exposed_tables: Option<Vec<ExposedTable>>,
+}
+
+/// Plugin dependency declaration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PluginDependency {
+    pub plugin_id: String,
+    pub version: Option<String>,  // Optional version constraint (e.g., ">=1.0.0", "1.2.3")
+}
+
+/// Exposed table declaration for cross-plugin access
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExposedTable {
+    pub table_name: String,
+    pub allowed_plugins: Vec<String>,  // Empty = no access, ["*"] = all plugins, ["plugin1", "plugin2"] = specific plugins only
+    pub description: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

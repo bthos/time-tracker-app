@@ -15,7 +15,7 @@ pub fn get_today_total(state: State<'_, AppState>) -> Result<i64, String> {
         .and_utc()
         .timestamp();
     
-    let activities = state.db.get_activities(start_of_day, now, None, None)
+    let activities = state.db.get_activities(start_of_day, now, None, None, None, None)
         .map_err(|e| e.to_string())?;
     
     let total: i64 = activities.iter().map(|a| a.duration_sec).sum();
@@ -43,17 +43,34 @@ pub fn resume_tracking(state: State<'_, AppState>) -> Result<(), String> {
 /// Get tracking status
 #[tauri::command]
 pub fn get_tracking_status(state: State<'_, AppState>) -> Result<serde_json::Value, String> {
-    let (is_paused, current_app) = if let Some(tracker) = state.tracker.lock().unwrap().as_ref() {
+    let (is_running, is_paused, current_app) = if let Some(tracker) = state.tracker.lock().unwrap().as_ref() {
+        let is_running = tracker.is_running();
         let is_paused = tracker.is_paused();
-        (is_paused, if !is_paused { tracker.get_current_app() } else { None })
+        let current_app = if !is_paused { tracker.get_current_app() } else { None };
+        (is_running, is_paused, current_app)
     } else {
-        (false, None)
+        (false, false, None)
     };
-    
+
+    let active_session_duration: Option<i64> = state
+        .db
+        .get_last_activity_today()
+        .ok()
+        .flatten()
+        .and_then(|(_, started_at, duration_sec, _)| {
+            let now = Utc::now().timestamp();
+            if now - started_at < 300 {
+                Some(duration_sec + (now - started_at))
+            } else {
+                None
+            }
+        });
+
     Ok(serde_json::json!({
-        "isTracking": true,
+        "isTracking": is_running,
         "isPaused": is_paused,
         "currentApp": current_app,
+        "activeSessionDuration": active_session_duration,
     }))
 }
 

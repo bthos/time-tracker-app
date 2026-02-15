@@ -9,8 +9,8 @@ pub mod api;
 pub mod ffi;
 
 pub use plugin::{Plugin, PluginInfo};
-pub use extensions::{EntityType, ExtensionType, SchemaChange, ModelField, QueryFilter, ForeignKey};
-pub use api::PluginAPIInterface;
+pub use extensions::{EntityType, ExtensionType, SchemaChange, ModelField, QueryFilter, ForeignKey, TableColumn, AutoTimestamp};
+pub use api::{PluginAPIInterface, ActivityFilters};
 pub use ffi::{PluginCreateFn, PluginDestroyFn};
 
 /// SDK version for compatibility checking

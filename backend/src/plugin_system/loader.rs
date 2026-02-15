@@ -366,6 +366,126 @@ impl PluginLoader {
         }
     }
     
+    /// Validate plugin dependencies are satisfied
+    pub fn validate_dependencies(
+        &self,
+        plugin_id: &str,
+        manifest: &PluginManifest,
+        installed_plugins: &[String],
+    ) -> Result<(), String> {
+        if let Some(ref dependencies) = manifest.plugin.dependencies {
+            for dep in dependencies {
+                if !installed_plugins.contains(&dep.plugin_id) {
+                    return Err(format!(
+                        "Plugin {} requires dependency {} which is not installed",
+                        plugin_id, dep.plugin_id
+                    ));
+                }
+                // TODO: Add version constraint checking if needed
+                // For now, we just check if the plugin is installed
+            }
+        }
+        Ok(())
+    }
+    
+    /// Resolve plugin loading order based on dependencies (topological sort)
+    pub fn resolve_load_order(
+        &self,
+        plugins: &[(String, PluginManifest)],
+    ) -> Result<Vec<String>, String> {
+        use std::collections::{HashMap, HashSet, VecDeque};
+        
+        let mut in_degree: HashMap<String, usize> = HashMap::new();
+        let mut graph: HashMap<String, Vec<String>> = HashMap::new();
+        let mut all_plugins: HashSet<String> = HashSet::new();
+        
+        // Initialize graph and collect all plugin IDs
+        for (plugin_id, manifest) in plugins {
+            all_plugins.insert(plugin_id.clone());
+            in_degree.insert(plugin_id.clone(), 0);
+            graph.insert(plugin_id.clone(), Vec::new());
+            
+            if let Some(ref dependencies) = manifest.plugin.dependencies {
+                for dep in dependencies {
+                    graph.entry(dep.plugin_id.clone())
+                        .or_insert_with(Vec::new)
+                        .push(plugin_id.clone());
+                    *in_degree.entry(plugin_id.clone()).or_insert(0) += 1;
+                }
+            }
+        }
+        
+        // Check for circular dependencies
+        let mut visited = HashSet::new();
+        let mut rec_stack = HashSet::new();
+        
+        fn has_cycle(
+            plugin_id: &str,
+            graph: &HashMap<String, Vec<String>>,
+            visited: &mut HashSet<String>,
+            rec_stack: &mut HashSet<String>,
+        ) -> bool {
+            visited.insert(plugin_id.to_string());
+            rec_stack.insert(plugin_id.to_string());
+            
+            if let Some(deps) = graph.get(plugin_id) {
+                for dep in deps {
+                    if !visited.contains(dep) {
+                        if has_cycle(dep, graph, visited, rec_stack) {
+                            return true;
+                        }
+                    } else if rec_stack.contains(dep) {
+                        return true;
+                    }
+                }
+            }
+            
+            rec_stack.remove(plugin_id);
+            false
+        }
+        
+        for plugin_id in all_plugins.iter() {
+            if !visited.contains(plugin_id) {
+                if has_cycle(plugin_id, &graph, &mut visited, &mut rec_stack) {
+                    return Err("Circular dependency detected in plugin dependencies".to_string());
+                }
+            }
+        }
+        
+        // Topological sort using Kahn's algorithm
+        let mut queue = VecDeque::new();
+        let mut result = Vec::new();
+        
+        // Find all plugins with no incoming edges
+        for (plugin_id, degree) in &in_degree {
+            if *degree == 0 {
+                queue.push_back(plugin_id.clone());
+            }
+        }
+        
+        while let Some(plugin_id) = queue.pop_front() {
+            result.push(plugin_id.clone());
+            
+            if let Some(deps) = graph.get(&plugin_id) {
+                for dep in deps {
+                    if let Some(degree) = in_degree.get_mut(dep) {
+                        *degree -= 1;
+                        if *degree == 0 {
+                            queue.push_back(dep.clone());
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Check if all plugins were processed (should be if no cycles)
+        if result.len() != all_plugins.len() {
+            return Err("Failed to resolve dependency order - some plugins have unsatisfied dependencies".to_string());
+        }
+        
+        Ok(result)
+    }
+    
     /// Load all installed plugins from the plugins directory
     /// Returns a vector of (plugin_id, plugin_instance) tuples
     pub fn load_all_installed_plugins(
@@ -378,18 +498,25 @@ impl PluginLoader {
         let installed_plugins = db.get_installed_plugins()
             .map_err(|e| format!("Failed to get installed plugins: {}", e))?;
         
+        // Collect plugin IDs and manifests for dependency resolution
+        let mut plugin_manifests: Vec<(String, PluginManifest)> = Vec::new();
+        let mut plugin_info: HashMap<String, (String, Option<String>)> = HashMap::new(); // plugin_id -> (author, manifest_path)
+        
         for (plugin_id, _name, _version, _description, _repo_url, _manifest_path, _frontend_entry, _frontend_components, author, enabled) in installed_plugins {
             // Skip disabled plugins
             if !enabled {
                 continue;
             }
             
+            // Clone manifest_path early to avoid move issues
+            let manifest_path_clone = _manifest_path.clone();
+            
             // Get author from database or try to read from manifest
             let author = if let Some(auth) = author {
                 auth
             } else {
                 // Try to read author from manifest if not in database
-                if let Some(manifest_path_str) = _manifest_path {
+                if let Some(ref manifest_path_str) = manifest_path_clone {
                     let manifest_path = std::path::PathBuf::from(manifest_path_str);
                     if let Ok(manifest) = self.load_manifest(&manifest_path) {
                         manifest.plugin.author
@@ -403,15 +530,46 @@ impl PluginLoader {
                 }
             };
             
-            // Try to load the plugin dynamically
-            match self.load_dynamic_plugin(&author, &plugin_id) {
-                Ok(plugin) => {
-                    loaded_plugins.push((plugin_id.clone(), plugin));
-                    eprintln!("Loaded dynamic plugin: {}", plugin_id);
+            // Load manifest for dependency resolution
+            if let Some(ref manifest_path_str) = manifest_path_clone {
+                let manifest_path = std::path::PathBuf::from(manifest_path_str);
+                if let Ok(manifest) = self.load_manifest(&manifest_path) {
+                    plugin_manifests.push((plugin_id.clone(), manifest));
+                    plugin_info.insert(plugin_id.clone(), (author.clone(), manifest_path_clone));
+                } else {
+                    eprintln!("Warning: Failed to load manifest for plugin {}", plugin_id);
+                    plugin_info.insert(plugin_id.clone(), (author.clone(), None));
                 }
-                Err(e) => {
-                    eprintln!("Warning: Failed to load plugin {}: {}", plugin_id, e);
-                    // Continue loading other plugins even if one fails
+            } else {
+                plugin_info.insert(plugin_id.clone(), (author.clone(), None));
+            }
+        }
+        
+        // Resolve load order based on dependencies
+        let load_order = self.resolve_load_order(&plugin_manifests)?;
+        
+        // Validate dependencies for each plugin
+        let installed_plugin_ids: Vec<String> = plugin_info.keys().cloned().collect();
+        for (plugin_id, manifest) in &plugin_manifests {
+            if let Err(e) = self.validate_dependencies(plugin_id, manifest, &installed_plugin_ids) {
+                eprintln!("Warning: {}", e);
+                // Continue loading other plugins even if dependencies are missing
+            }
+        }
+        
+        // Load plugins in dependency order
+        for plugin_id in load_order {
+            if let Some((author, _manifest_path)) = plugin_info.get(&plugin_id) {
+                // Try to load the plugin dynamically
+                match self.load_dynamic_plugin(author, &plugin_id) {
+                    Ok(plugin) => {
+                        loaded_plugins.push((plugin_id.clone(), plugin));
+                        eprintln!("Loaded dynamic plugin: {}", plugin_id);
+                    }
+                    Err(e) => {
+                        eprintln!("Warning: Failed to load plugin {}: {}", plugin_id, e);
+                        // Continue loading other plugins even if one fails
+                    }
                 }
             }
         }

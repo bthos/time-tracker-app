@@ -1,11 +1,15 @@
 //! Activity-related commands
 
-use crate::database::Activity;
+use std::collections::HashMap;
+
 use crate::commands::common::AppState;
+use crate::database::Activity;
+use crate::plugin_system::extensions::EntityType;
 use tauri::State;
 
-/// Get activities for a time range with optional pagination (lazy loading)
-/// If limit is None, returns all activities (backward compatibility)
+/// Get activities for a time range with optional pagination (lazy loading).
+/// If limit is None, returns all activities (backward compatibility).
+/// When extension_registry is available, plugin query filters are applied after the database query.
 #[tauri::command]
 pub fn get_activities(
     state: State<'_, AppState>,
@@ -13,11 +17,20 @@ pub fn get_activities(
     end: i64,
     limit: Option<i64>,
     offset: Option<i64>,
+    filter_params: Option<HashMap<String, serde_json::Value>>,
 ) -> Result<Vec<Activity>, String> {
-    state
+    let activities = state
         .db
-        .get_activities(start, end, limit, offset)
-        .map_err(|e: rusqlite::Error| e.to_string())
+        .get_activities(start, end, limit, offset, None, None)
+        .map_err(|e: rusqlite::Error| e.to_string())?;
+
+    if let Some(reg) = &state.extension_registry {
+        let params = filter_params.unwrap_or_default();
+        reg.apply_query_filters(EntityType::Activity, activities, params)
+            .map_err(|e| format!("Query filter error: {}", e))
+    } else {
+        Ok(activities)
+    }
 }
 
 /// Get activity by ID
