@@ -3,11 +3,11 @@
 
 export const config = {
   github: {
-    username: 'bthos', // Replace with your GitHub username
+    username: 'tmtrckr', // Replace with your GitHub username
     repository: 'time-tracker-app', // Replace if your repository has a different name
   },
   website: {
-    baseUrl: 'https://bthos.github.io/time-tracker-app', // Update with your GitHub Pages URL
+    baseUrl: 'https://tmtrckr.github.io/time-tracker-app', // Update with your GitHub Pages URL
   },
 };
 

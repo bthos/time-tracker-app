@@ -110,7 +110,7 @@ const Footer: FC = () => {
               rel="noopener noreferrer"
               className="hover:text-white transition-colors ml-1"
             >
-              bthos
+              {config.github.username}
             </a>
           </p>
         </div>
