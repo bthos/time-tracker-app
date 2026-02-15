@@ -3,11 +3,24 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Timer, Store, BookOpen } from 'lucide-react';
 import { getGitHubUrl } from '../config';
 import ThemeToggle from './ThemeToggle';
+import { scrollToElement } from '../utils/scroll';
 
 const Header: FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+
+  const handleHomeClick = (e: React.MouseEvent) => {
+    setIsMenuOpen(false);
+    
+    // If we're already on the home page, scroll to top
+    if (location.pathname === '/' || location.pathname === '') {
+      e.preventDefault();
+      window.history.replaceState(null, '', '/');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    // Otherwise, Link component will handle navigation
+  };
 
   const handleSectionClick = (id: string, e: React.MouseEvent) => {
     e.preventDefault();
@@ -15,14 +28,11 @@ const Header: FC = () => {
     
     // If we're on the home page, scroll directly
     if (location.pathname === '/' || location.pathname === '') {
-      const element = document.getElementById(id);
-      if (element) {
-        // Use history API to update hash without triggering route change
-        window.history.replaceState(null, '', `#${id}`);
-        setTimeout(() => {
-          element.scrollIntoView({ behavior: 'smooth' });
-        }, 10);
-      }
+      // Use history API to update hash without triggering route change
+      window.history.replaceState(null, '', `#${id}`);
+      setTimeout(() => {
+        scrollToElement(id);
+      }, 10);
     } else {
       // Navigate to home page first, then scroll after navigation completes
       sessionStorage.setItem('scrollToSection', id);
@@ -34,7 +44,7 @@ const Header: FC = () => {
     <header className="fixed top-0 left-0 right-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm shadow-sm z-50">
       <nav className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
-          <Link to="/" className="flex items-center space-x-2">
+          <Link to="/" onClick={handleHomeClick} className="flex items-center space-x-2">
             <Timer className="w-6 h-6 text-primary-600" />
             <span className="text-xl font-bold text-gray-900 dark:text-white">TimeTracker</span>
           </Link>
@@ -43,6 +53,7 @@ const Header: FC = () => {
           <div className="hidden md:flex items-center space-x-8">
             <Link
               to="/"
+              onClick={handleHomeClick}
               className="text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
             >
               Home
@@ -55,18 +66,18 @@ const Header: FC = () => {
               Features
             </a>
             <a
-              href="#download"
-              onClick={(e) => handleSectionClick('download', e)}
-              className="text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
-            >
-              Download
-            </a>
-            <a
               href="#screenshots"
               onClick={(e) => handleSectionClick('screenshots', e)}
               className="text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
             >
               Screenshots
+            </a>
+            <a
+              href="#download"
+              onClick={(e) => handleSectionClick('download', e)}
+              className="text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
+            >
+              Download
             </a>
             <Link
               to="/marketplace"
@@ -126,7 +137,10 @@ const Header: FC = () => {
           <div className="md:hidden mt-4 space-y-4 pb-4">
             <Link
               to="/"
-              onClick={() => setIsMenuOpen(false)}
+              onClick={(e) => {
+                setIsMenuOpen(false);
+                handleHomeClick(e);
+              }}
               className="block w-full text-left text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
             >
               Home
@@ -139,18 +153,18 @@ const Header: FC = () => {
               Features
             </a>
             <a
-              href="#download"
-              onClick={(e) => handleSectionClick('download', e)}
-              className="block w-full text-left text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
-            >
-              Download
-            </a>
-            <a
               href="#screenshots"
               onClick={(e) => handleSectionClick('screenshots', e)}
               className="block w-full text-left text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
             >
               Screenshots
+            </a>
+            <a
+              href="#download"
+              onClick={(e) => handleSectionClick('download', e)}
+              className="block w-full text-left text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
+            >
+              Download
             </a>
             <Link
               to="/marketplace"

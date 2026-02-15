@@ -12,7 +12,7 @@ function DocsPage() {
   return (
     <div className="min-h-screen bg-white dark:bg-gray-900">
       <Header />
-      <main>
+      <main className="pt-20">
         <Docs />
       </main>
       <Footer />

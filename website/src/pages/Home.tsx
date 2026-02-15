@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import Header from '../components/Header';
+import { scrollToElement } from '../utils/scroll';
 import Hero from '../components/Hero';
 import Stats from '../components/Stats';
 import KeyBenefits from '../components/KeyBenefits';
@@ -26,12 +27,9 @@ function Home() {
         sessionStorage.removeItem('scrollToSection');
         // Wait for page to fully render
         setTimeout(() => {
-          const element = document.getElementById(scrollToSection);
-          if (element) {
-            // Use history API to set hash without triggering route change
-            window.history.replaceState(null, '', `#${scrollToSection}`);
-            element.scrollIntoView({ behavior: 'smooth' });
-          }
+          // Use history API to set hash without triggering route change
+          window.history.replaceState(null, '', `#${scrollToSection}`);
+          scrollToElement(scrollToSection);
         }, 300);
         return;
       }
@@ -42,11 +40,11 @@ function Home() {
         const id = hash.substring(1); // Remove the # symbol
         // Wait for page to fully render
         setTimeout(() => {
-          const element = document.getElementById(id);
-          if (element) {
-            element.scrollIntoView({ behavior: 'smooth' });
-          }
+          scrollToElement(id);
         }, 200);
+      } else {
+        // No hash - scroll to top when navigating to home page
+        window.scrollTo({ top: 0, behavior: 'smooth' });
       }
     };
 
@@ -73,8 +71,8 @@ function Home() {
         <Plugins />
         <UseCases />
         <Screenshots />
-        <Trust />
         <Download />
+        <Trust />
         <FAQ />
       </main>
       <Footer />

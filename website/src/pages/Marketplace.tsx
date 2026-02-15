@@ -12,7 +12,7 @@ function Marketplace() {
   return (
     <div className="min-h-screen bg-white dark:bg-gray-900">
       <Header />
-      <main>
+      <main className="pt-20">
         <PluginMarketplace />
       </main>
       <Footer />

@@ -1,16 +1,14 @@
 import { FC } from 'react';
 import { getGitHubUrl, getAssetPath } from '../config';
+import { scrollToElement } from '../utils/scroll';
 
 const Hero: FC = () => {
   const scrollToDownload = () => {
-    const element = document.getElementById('download');
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth' });
-    }
+    scrollToElement('download');
   };
 
   return (
-    <section className="pt-24 pb-16 px-4 bg-gradient-to-b from-gray-50 to-white dark:from-gray-900 dark:to-gray-800">
+    <section className="pt-20 pb-16 px-4 bg-gradient-to-b from-gray-50 to-white dark:from-gray-900 dark:to-gray-800">
       <div className="container mx-auto max-w-6xl">
         <div className="grid md:grid-cols-2 gap-12 items-center">
           <div className="space-y-6">

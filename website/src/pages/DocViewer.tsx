@@ -4,7 +4,7 @@ import { ArrowLeft, Loader2 } from 'lucide-react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import MarkdownRenderer from '../components/MarkdownRenderer';
-import { getGitHubUrl, getGitHubRawUrl } from '../config';
+import { getGitHubRawUrl } from '../config';
 
 const DOC_URLS: Record<string, string> = {
   'overview': getGitHubRawUrl('docs/README.md'),
@@ -42,18 +42,23 @@ function DocViewer() {
         return response.text();
       })
       .then((text) => {
-        // Fix relative links to point to GitHub
+        // Fix relative links to use HashRouter format with # prefix
         const fixedContent = text.replace(
           /\[([^\]]+)\]\(\.\/([^)]+)\)/g,
-          (match, text, path) => {
+          (match, linkText, path) => {
+            // Handle links with anchors (e.g., ./PLUGIN_DEVELOPMENT.md#examples)
+            const [filePath, anchor] = path.split('#');
             const docMap: Record<string, string> = {
               'PLUGIN_DEVELOPMENT.md': 'plugin-development',
               'SDK_REFERENCE.md': 'sdk-reference',
               'README.md': 'overview',
             };
-            const targetDoc = docMap[path];
+            const targetDoc = docMap[filePath];
             if (targetDoc) {
-              return `[${text}](/docs/${targetDoc})`;
+              // Use path format for React Router Link (HashRouter adds # automatically)
+              // Format: /docs/docId or /docs/docId#anchor
+              const anchorPart = anchor ? `#${anchor}` : '';
+              return `[${linkText}](/docs/${targetDoc}${anchorPart})`;
             }
             return match;
           }
@@ -75,7 +80,7 @@ function DocViewer() {
     return (
       <div className="min-h-screen bg-white dark:bg-gray-900">
         <Header />
-        <main className="container mx-auto px-4 py-16">
+        <main className="container mx-auto px-4 pt-20 pb-16">
           <div className="text-center">
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">Document Not Found</h1>
             <Link to="/docs" className="text-primary-600 dark:text-primary-400 hover:underline">
@@ -91,7 +96,7 @@ function DocViewer() {
   return (
     <div className="min-h-screen bg-white dark:bg-gray-900">
       <Header />
-      <main className="container mx-auto px-4 py-8 max-w-5xl">
+      <main className="container mx-auto px-4 pt-20 pb-8 max-w-5xl">
         <Link
           to="/docs"
           className="inline-flex items-center gap-2 text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition-colors mb-6"

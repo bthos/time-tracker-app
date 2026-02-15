@@ -32,3 +32,5 @@ body.dark {
 #root {
   min-height: 100vh;
 }
+
+/* Note: scroll-margin-top removed - using JavaScript scroll offset instead to avoid double spacing */
