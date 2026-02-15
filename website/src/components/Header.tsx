@@ -1,5 +1,5 @@
 import { useState, FC } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Timer, Store, BookOpen } from 'lucide-react';
 import { getGitHubUrl } from '../config';
 import ThemeToggle from './ThemeToggle';
@@ -7,6 +7,7 @@ import ThemeToggle from './ThemeToggle';
 const Header: FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
 
   const handleSectionClick = (id: string, e: React.MouseEvent) => {
     e.preventDefault();
@@ -16,13 +17,17 @@ const Header: FC = () => {
     if (location.pathname === '/' || location.pathname === '') {
       const element = document.getElementById(id);
       if (element) {
+        // Update URL hash and scroll
         window.location.hash = id;
-        element.scrollIntoView({ behavior: 'smooth' });
+        setTimeout(() => {
+          element.scrollIntoView({ behavior: 'smooth' });
+        }, 10);
       }
     } else {
-      // Navigate to home page with hash in the URL
-      // Using window.location to ensure hash is preserved
-      window.location.href = `/#${id}`;
+      // Navigate to home page with hash, then scroll after navigation
+      // Store the target section ID
+      sessionStorage.setItem('scrollToSection', id);
+      navigate('/');
     }
   };
 

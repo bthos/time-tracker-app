@@ -19,17 +19,44 @@ function Home() {
 
   useEffect(() => {
     // Handle hash navigation when coming from other pages or on initial load
-    const hash = window.location.hash || location.hash;
-    if (hash) {
-      const id = hash.substring(1); // Remove the # symbol
-      const element = document.getElementById(id);
-      if (element) {
-        // Small delay to ensure page is rendered
-        setTimeout(() => {
-          element.scrollIntoView({ behavior: 'smooth' });
-        }, 150);
+    const handleHashNavigation = () => {
+      // First check sessionStorage for section to scroll to (from other pages)
+      const scrollToSection = sessionStorage.getItem('scrollToSection');
+      if (scrollToSection) {
+        sessionStorage.removeItem('scrollToSection');
+        const element = document.getElementById(scrollToSection);
+        if (element) {
+          window.location.hash = scrollToSection;
+          setTimeout(() => {
+            element.scrollIntoView({ behavior: 'smooth' });
+          }, 200);
+          return;
+        }
       }
-    }
+
+      // Otherwise check hash in URL
+      const hash = window.location.hash;
+      if (hash) {
+        const id = hash.substring(1); // Remove the # symbol
+        const element = document.getElementById(id);
+        if (element) {
+          // Small delay to ensure page is rendered
+          setTimeout(() => {
+            element.scrollIntoView({ behavior: 'smooth' });
+          }, 200);
+        }
+      }
+    };
+
+    // Check hash on mount
+    handleHashNavigation();
+
+    // Also listen for hash changes
+    window.addEventListener('hashchange', handleHashNavigation);
+
+    return () => {
+      window.removeEventListener('hashchange', handleHashNavigation);
+    };
   }, [location]);
 
   return (

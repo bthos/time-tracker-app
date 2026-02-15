@@ -1,4 +1,5 @@
 import { FC } from 'react';
+import { Link } from 'react-router-dom';
 import { BookOpen, Code, FileText, ExternalLink } from 'lucide-react';
 import { getGitHubUrl } from '../config';
 
@@ -8,6 +9,7 @@ const Docs: FC = () => {
       title: 'Documentation Overview',
       description: 'Overview of the plugin system documentation structure and quick start guide. Start here to get oriented.',
       icon: FileText,
+      route: '/docs/overview',
       href: getGitHubUrl('/blob/main/docs/README.md'),
       features: [
         'Documentation structure',
@@ -20,6 +22,7 @@ const Docs: FC = () => {
       title: 'Plugin Development Guide',
       description: 'Comprehensive tutorial-style guide for developing plugins. Learn how to build your first plugin step-by-step.',
       icon: BookOpen,
+      route: '/docs/plugin-development',
       href: getGitHubUrl('/blob/main/docs/PLUGIN_DEVELOPMENT.md'),
       features: [
         'Getting started with plugin development',
@@ -33,6 +36,7 @@ const Docs: FC = () => {
       title: 'SDK Reference',
       description: 'Complete API reference for the Plugin SDK. Use this as a reference when implementing plugins.',
       icon: Code,
+      route: '/docs/sdk-reference',
       href: getGitHubUrl('/blob/main/docs/SDK_REFERENCE.md'),
       features: [
         'Plugin trait and required methods',
@@ -57,14 +61,8 @@ const Docs: FC = () => {
         <div className="grid md:grid-cols-3 gap-6 mb-12">
           {docs.map((doc, index) => {
             const IconComponent = doc.icon;
-            return (
-              <a
-                key={index}
-                href={doc.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="bg-gray-50 dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700 hover:border-primary-600 dark:hover:border-primary-500 hover:shadow-lg transition-all group"
-              >
+            const content = (
+              <>
                 <div className="mb-4 flex items-center justify-between">
                   <IconComponent className="w-8 h-8 text-primary-600 dark:text-primary-400" />
                   <ExternalLink className="w-5 h-5 text-gray-400 dark:text-gray-500 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors" />
@@ -83,6 +81,30 @@ const Docs: FC = () => {
                     </li>
                   ))}
                 </ul>
+              </>
+            );
+
+            if (doc.route) {
+              return (
+                <Link
+                  key={index}
+                  to={doc.route}
+                  className="bg-gray-50 dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700 hover:border-primary-600 dark:hover:border-primary-500 hover:shadow-lg transition-all group block"
+                >
+                  {content}
+                </Link>
+              );
+            }
+
+            return (
+              <a
+                key={index}
+                href={doc.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-gray-50 dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700 hover:border-primary-600 dark:hover:border-primary-500 hover:shadow-lg transition-all group block"
+              >
+                {content}
               </a>
             );
           })}
