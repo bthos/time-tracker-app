@@ -8,6 +8,7 @@ import UseCases from './components/UseCases';
 import Screenshots from './components/Screenshots';
 import Trust from './components/Trust';
 import Download from './components/Download';
+import Docs from './components/Docs';
 import FAQ from './components/FAQ';
 import Footer from './components/Footer';
 
@@ -25,6 +26,7 @@ function App() {
         <Screenshots />
         <Trust />
         <Download />
+        <Docs />
         <FAQ />
       </main>
       <Footer />

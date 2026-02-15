@@ -43,6 +43,12 @@ const Header: FC = () => {
               Download
             </button>
             <button
+              onClick={() => scrollToSection('docs')}
+              className="text-gray-700 hover:text-primary-600 transition-colors"
+            >
+              Docs
+            </button>
+            <button
               onClick={() => scrollToSection('faq')}
               className="text-gray-700 hover:text-primary-600 transition-colors"
             >
@@ -94,6 +100,12 @@ const Header: FC = () => {
               className="block w-full text-left text-gray-700 hover:text-primary-600 transition-colors"
             >
               Download
+            </button>
+            <button
+              onClick={() => scrollToSection('docs')}
+              className="block w-full text-left text-gray-700 hover:text-primary-600 transition-colors"
+            >
+              Docs
             </button>
             <button
               onClick={() => scrollToSection('faq')}
